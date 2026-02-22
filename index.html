@@ -188,7 +188,7 @@
 
         <details class="panel-settings participants-settings" open>
           <summary>Participantes</summary>
-          <p class="hint">Nombre, emoji, color, porcentaje, animacion y visibilidad</p>
+          <p class="hint">Nombre, emoji, color, porcentaje, animacion, visibilidad y seccion Tira otra vez</p>
           <div id="itemList" class="item-list"></div>
 
           <div class="actions">
@@ -288,13 +288,22 @@
               🎲
             </button>
             <button
-              id="emojiModalClose"
-              class="color-modal-close"
+              id="emojiModalCancel"
+              class="mini-action icon-only color-modal-cancel"
               type="button"
-              aria-label="Cerrar selector de emoji"
-              title="Cerrar selector de emoji"
+              aria-label="Cancelar cambios de emoji"
+              title="Cancelar cambios"
             >
-              ✕
+              ❌
+            </button>
+            <button
+              id="emojiModalConfirm"
+              class="mini-action icon-only color-modal-confirm"
+              type="button"
+              aria-label="Confirmar emoji"
+              title="Confirmar emoji"
+            >
+              ✅
             </button>
           </div>
         </header>

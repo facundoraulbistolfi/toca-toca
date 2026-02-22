@@ -88,6 +88,14 @@ const WINNER_ANIMATION_OPTION_MAP = new Map(
   WINNER_ANIMATION_OPTIONS.map((option) => [option.id, option]),
 );
 const DEFAULT_PARTICIPANT_ANIMATION_MODE = "general";
+const RETRY_SLICE_COLOR_INDEX = -1;
+const RETRY_SLICE_LABEL = "Tira otra vez";
+const RETRY_SLICE_EMOJI = "🔁";
+const DEFAULT_RETRY_SLICE_ENABLED = false;
+const DEFAULT_RETRY_SLICE_PCT = 12;
+const MIN_RETRY_SLICE_PCT = 1;
+const MAX_RETRY_SLICE_PCT = 70;
+const DEFAULT_RETRY_SLICE_COLOR = "#6A1E2A";
 const PARTICIPANT_ANIMATION_OPTIONS = [
   { id: "general", emoji: "🌐", label: "General (usar ajuste global)" },
   ...WINNER_ANIMATION_OPTIONS
@@ -114,9 +122,10 @@ const WINNER_RESULT_EFFECT_CLASSES = [
   "winner-estrellas",
   "winner-fireworks",
   "winner-neon",
+  "result-failure-retry",
 ];
 const MIN_PARTICIPANTS = 2;
-const MAX_PARTICIPANTS = 30;
+const MAX_PARTICIPANTS = 20;
 const TOTAL_UNITS = 10000; // 100.00%
 const MIN_ITEM_UNITS = 1; // 0.01%
 const TAU = Math.PI * 2;
@@ -160,7 +169,7 @@ const DEFAULT_PARTICIPANTS = [
   { name: "Dai", color: "#D98F97", emoji: "💄" },
   { name: "Candy", color: "#8ECADA", emoji: "🍬" },
   { name: "Aaron", color: "#EB791E", emoji: "🐈" },
-  { name: "Pipi", color: "#2F323A", emoji: "🐈‍⬛" },
+  { name: "El pipi", color: "#2F323A", emoji: "🐈‍⬛" },
 ];
 const CARD_RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
 const CARD_SUITS = [
@@ -218,7 +227,8 @@ const refs = {
   colorGNumber: document.getElementById("colorGNumber"),
   colorBNumber: document.getElementById("colorBNumber"),
   emojiModal: document.getElementById("emojiModal"),
-  emojiModalClose: document.getElementById("emojiModalClose"),
+  emojiModalCancel: document.getElementById("emojiModalCancel"),
+  emojiModalConfirm: document.getElementById("emojiModalConfirm"),
   emojiRandomButton: document.getElementById("emojiRandomButton"),
   emojiSearchInput: document.getElementById("emojiSearchInput"),
   emojiNativeInput: document.getElementById("emojiNativeInput"),
@@ -244,6 +254,7 @@ let activeColorIndex = null;
 let activeColorDraft = null;
 let activeColorPaletteId = DEFAULT_COLOR_PALETTE_ID;
 let activeEmojiIndex = null;
+let activeEmojiDraft = null;
 let activeSpin = null;
 let audioContext = null;
 let rimLightMode = RIM_LIGHT_MODE.STANDBY;
@@ -367,7 +378,8 @@ function bindEvents() {
       closeEmojiModal();
     }
   });
-  refs.emojiModalClose.addEventListener("click", closeEmojiModal);
+  refs.emojiModalCancel.addEventListener("click", closeEmojiModal);
+  refs.emojiModalConfirm.addEventListener("click", confirmEmojiModalSelection);
   refs.emojiRandomButton.addEventListener("click", pickRandomEmojiFromFilter);
   refs.emojiSearchInput.addEventListener("input", () => {
     renderEmojiSections(refs.emojiSearchInput.value);
@@ -375,13 +387,13 @@ function bindEvents() {
   refs.emojiNativeInput.addEventListener("input", () => {
     const normalized = sanitizeEmoji(refs.emojiNativeInput.value, activeEmojiIndex ?? 0);
     refs.emojiNativeInput.value = normalized;
-    setEmojiFromModal(normalized, true);
+    setEmojiFromModal(normalized);
   });
   refs.emojiNativeInput.addEventListener("blur", () => {
     if (activeEmojiIndex === null) {
       return;
     }
-    refs.emojiNativeInput.value = sanitizeEmoji(state.items[activeEmojiIndex]?.emoji, activeEmojiIndex);
+    refs.emojiNativeInput.value = sanitizeEmoji(activeEmojiDraft, activeEmojiIndex);
   });
   refs.infoModal.addEventListener("click", (event) => {
     if (event.target instanceof HTMLElement && event.target.hasAttribute("data-close-info-modal")) {
@@ -641,8 +653,7 @@ function renderColorPresetGrid(selectedColor) {
 }
 
 function renderEmojiSections(rawFilter) {
-  const selectedEmoji =
-    activeEmojiIndex === null ? null : sanitizeEmoji(state.items[activeEmojiIndex]?.emoji, activeEmojiIndex);
+  const selectedEmoji = activeEmojiIndex === null ? null : sanitizeEmoji(activeEmojiDraft, activeEmojiIndex);
   const sections = getFilteredEmojiSections(rawFilter);
   refs.emojiSections.replaceChildren();
   let hasMatches = false;
@@ -674,10 +685,10 @@ function renderEmojiSections(rawFilter) {
       }
       button.setAttribute("aria-label", `Elegir emoji ${emoji}`);
       button.addEventListener("click", () => {
-        setEmojiFromModal(emoji, true);
+        setEmojiFromModal(emoji);
       });
       button.addEventListener("dblclick", () => {
-        setEmojiFromModal(emoji, false);
+        setEmojiFromModal(emoji, true);
       });
       grid.append(button);
     });
@@ -828,6 +839,18 @@ function renderTextSettings() {
 }
 
 function renderItemList() {
+  const maxParticipantsReached = state.items.length >= MAX_PARTICIPANTS;
+  refs.addItemButton.disabled = isSpinning || maxParticipantsReached;
+  refs.addItemButton.title = maxParticipantsReached
+    ? `Maximo ${MAX_PARTICIPANTS} participantes por configuracion.`
+    : "Agregar participante";
+  refs.addItemButton.setAttribute(
+    "aria-label",
+    maxParticipantsReached
+      ? `Maximo ${MAX_PARTICIPANTS} participantes alcanzado`
+      : "Agregar participante",
+  );
+
   refs.itemList.replaceChildren();
   const visibleCount = getVisibleParticipantCount(state.items);
 
@@ -858,6 +881,11 @@ function renderItemList() {
     nameInput.setAttribute("aria-label", `Nombre del participante ${index + 1}`);
     nameInput.disabled = isSpinning;
     nameInput.addEventListener("input", () => {
+      state.items[index].name = String(nameInput.value || "").slice(0, MAX_PARTICIPANT_NAME_LENGTH);
+      saveState();
+      drawWheel();
+    });
+    nameInput.addEventListener("blur", () => {
       state.items[index].name = normalizeName(nameInput.value, index);
       nameInput.value = state.items[index].name;
       saveState();
@@ -979,6 +1007,94 @@ function renderItemList() {
     );
     refs.itemList.append(row);
   });
+
+  renderRetrySliceRow();
+}
+
+function renderRetrySliceRow() {
+  const row = document.createElement("div");
+  row.className = "item-row retry-row";
+
+  const enabled = sanitizeRetrySliceEnabled(state.retrySliceEnabled);
+  const retryColor = sanitizeRetrySliceColor(state.retrySliceColor);
+  const retryPct = sanitizeRetrySlicePct(state.retrySlicePct);
+
+  const emojiPlaceholder = document.createElement("span");
+  emojiPlaceholder.className = "retry-placeholder retry-emoji-placeholder";
+  emojiPlaceholder.textContent = RETRY_SLICE_EMOJI;
+  emojiPlaceholder.title = "Emoji fijo de la seccion Tira otra vez";
+  emojiPlaceholder.setAttribute("aria-label", "Emoji fijo de la seccion Tira otra vez");
+
+  const nameTag = document.createElement("div");
+  nameTag.className = "retry-name-tag";
+  nameTag.textContent = RETRY_SLICE_LABEL;
+  if (!enabled) {
+    nameTag.classList.add("is-disabled");
+  }
+
+  const colorButton = document.createElement("button");
+  colorButton.type = "button";
+  colorButton.className = "color-swatch retry-color-swatch";
+  colorButton.style.background = retryColor;
+  colorButton.title = "Color de la seccion Tira otra vez";
+  colorButton.setAttribute("aria-label", "Color de la seccion Tira otra vez");
+  colorButton.disabled = isSpinning || !enabled;
+  colorButton.addEventListener("click", () => {
+    openColorModal(RETRY_SLICE_COLOR_INDEX);
+  });
+
+  const pctInput = document.createElement("input");
+  pctInput.type = "number";
+  pctInput.className = "pct-input retry-pct-input";
+  pctInput.step = "1";
+  pctInput.min = String(MIN_RETRY_SLICE_PCT);
+  pctInput.max = String(MAX_RETRY_SLICE_PCT);
+  pctInput.value = String(retryPct);
+  pctInput.title = `Porcentaje de ${RETRY_SLICE_LABEL}`;
+  pctInput.setAttribute("aria-label", `Porcentaje de ${RETRY_SLICE_LABEL}`);
+  pctInput.disabled = isSpinning || !enabled;
+  pctInput.addEventListener("change", () => {
+    setRetrySlicePct(pctInput.value);
+  });
+
+  const animationPlaceholder = document.createElement("span");
+  animationPlaceholder.className = "retry-placeholder retry-control-placeholder";
+  animationPlaceholder.textContent = "—";
+  animationPlaceholder.setAttribute("aria-hidden", "true");
+
+  const visibilityButton = document.createElement("button");
+  visibilityButton.type = "button";
+  visibilityButton.className = "visibility-button";
+  visibilityButton.textContent = enabled ? "👁" : "🙈";
+  visibilityButton.title = enabled
+    ? "Ocultar seccion Tira otra vez de la rula"
+    : "Mostrar seccion Tira otra vez en la rula";
+  visibilityButton.setAttribute(
+    "aria-label",
+    enabled
+      ? "Ocultar seccion Tira otra vez de la rula"
+      : "Mostrar seccion Tira otra vez en la rula",
+  );
+  visibilityButton.disabled = isSpinning;
+  visibilityButton.addEventListener("click", () => {
+    setRetrySliceEnabled(!enabled);
+  });
+
+  const placeholderRemove = document.createElement("span");
+  placeholderRemove.className = "retry-placeholder";
+  placeholderRemove.textContent = "—";
+  placeholderRemove.setAttribute("aria-hidden", "true");
+
+  row.append(
+    emojiPlaceholder,
+    nameTag,
+    colorButton,
+    pctInput,
+    animationPlaceholder,
+    visibilityButton,
+    placeholderRemove,
+  );
+  refs.itemList.append(row);
 }
 
 function openColorModal(index) {
@@ -986,7 +1102,11 @@ function openColorModal(index) {
     return;
   }
   activeColorIndex = index;
-  activeColorDraft = sanitizeColor(state.items[index]?.color, index);
+  if (isRetrySliceColorIndex(index)) {
+    activeColorDraft = sanitizeRetrySliceColor(state.retrySliceColor);
+  } else {
+    activeColorDraft = sanitizeColor(state.items[index]?.color, index);
+  }
   refs.colorModal.hidden = false;
   refs.colorPaletteSelect.value = sanitizeColorPaletteId(activeColorPaletteId);
   syncColorModal(activeColorDraft);
@@ -1003,11 +1123,23 @@ function confirmColorModalSelection() {
     closeColorModal();
     return;
   }
+
+  if (isRetrySliceColorIndex(activeColorIndex)) {
+    const color = sanitizeRetrySliceColor(activeColorDraft || state.retrySliceColor);
+    state.retrySliceColor = color;
+    const swatch = refs.itemList.querySelector(".retry-color-swatch");
+    if (swatch instanceof HTMLElement) {
+      swatch.style.background = color;
+    }
+    saveState();
+    drawWheel();
+    closeColorModal();
+    return;
+  }
+
   const color = sanitizeColor(activeColorDraft || state.items[activeColorIndex]?.color, activeColorIndex);
   state.items[activeColorIndex].color = color;
-  const swatch = refs.itemList.querySelector(
-    `.color-swatch[data-participant-index="${activeColorIndex}"]`,
-  );
+  const swatch = refs.itemList.querySelector(`.color-swatch[data-participant-index="${activeColorIndex}"]`);
   if (swatch instanceof HTMLElement) {
     swatch.style.background = color;
   }
@@ -1042,7 +1174,9 @@ function setColorFromModal(hexColor) {
   if (activeColorIndex === null) {
     return;
   }
-  const color = sanitizeColor(hexColor, activeColorIndex);
+  const color = isRetrySliceColorIndex(activeColorIndex)
+    ? sanitizeRetrySliceColor(hexColor)
+    : sanitizeColor(hexColor, activeColorIndex);
   activeColorDraft = color;
   syncColorModal(color);
 }
@@ -1052,9 +1186,10 @@ function openEmojiModal(index) {
     return;
   }
   activeEmojiIndex = index;
+  activeEmojiDraft = sanitizeEmoji(state.items[index]?.emoji, index);
   refs.emojiModal.hidden = false;
   refs.emojiSearchInput.value = "";
-  refs.emojiNativeInput.value = sanitizeEmoji(state.items[index]?.emoji, index);
+  refs.emojiNativeInput.value = activeEmojiDraft;
   renderEmojiSections("");
   refs.emojiSearchInput.focus();
 }
@@ -1062,14 +1197,31 @@ function openEmojiModal(index) {
 function closeEmojiModal() {
   refs.emojiModal.hidden = true;
   activeEmojiIndex = null;
+  activeEmojiDraft = null;
 }
 
-function setEmojiFromModal(rawEmoji, keepOpen = false) {
+function setEmojiFromModal(rawEmoji, confirmSelection = false) {
   if (activeEmojiIndex === null) {
     return;
   }
 
   const nextEmoji = sanitizeEmoji(rawEmoji, activeEmojiIndex);
+  activeEmojiDraft = nextEmoji;
+  refs.emojiNativeInput.value = nextEmoji;
+  renderEmojiSections(refs.emojiSearchInput.value);
+
+  if (confirmSelection) {
+    confirmEmojiModalSelection();
+  }
+}
+
+function confirmEmojiModalSelection() {
+  if (activeEmojiIndex === null) {
+    closeEmojiModal();
+    return;
+  }
+
+  const nextEmoji = sanitizeEmoji(activeEmojiDraft, activeEmojiIndex);
   state.items[activeEmojiIndex].emoji = nextEmoji;
 
   const trigger = refs.itemList.querySelector(
@@ -1079,14 +1231,9 @@ function setEmojiFromModal(rawEmoji, keepOpen = false) {
     trigger.textContent = nextEmoji;
   }
 
-  refs.emojiNativeInput.value = nextEmoji;
   saveState();
   drawWheel();
-  renderEmojiSections(refs.emojiSearchInput.value);
-
-  if (!keepOpen) {
-    closeEmojiModal();
-  }
+  closeEmojiModal();
 }
 
 function drawWheel() {
@@ -1108,10 +1255,10 @@ function drawWheel() {
 
   const rotationRad = degToRad(currentRotationDeg);
   let cursor = rotationRad - Math.PI / 2;
-  const wheelItems = getVisibleItems();
+  const wheelEntries = getSpinEntries();
 
-  wheelItems.forEach((item) => {
-    const segmentRad = (item.pct / 100) * TAU;
+  wheelEntries.forEach((entry) => {
+    const segmentRad = (entry.pct / 100) * TAU;
     const startAngle = cursor;
     const endAngle = cursor + segmentRad;
 
@@ -1121,14 +1268,14 @@ function drawWheel() {
     ctx.moveTo(0, 0);
     ctx.arc(0, 0, sectionRadius, startAngle, endAngle);
     ctx.closePath();
-    ctx.fillStyle = item.color;
+    ctx.fillStyle = getSpinEntryColor(entry);
     ctx.fill();
     ctx.lineWidth = 1.2;
     ctx.strokeStyle = "rgba(255, 255, 255, 0.75)";
     ctx.stroke();
     ctx.restore();
 
-    drawSegmentLabel(item, startAngle + segmentRad / 2, sectionRadius);
+    drawSegmentLabel(entry, startAngle + segmentRad / 2, sectionRadius);
     cursor = endAngle;
   });
 
@@ -1378,10 +1525,12 @@ function getRimLightStyle(index, standbyPalette) {
 function getStandbyLightPalette() {
   const unique = new Set();
   const palette = [];
-  const sourceItems = getVisibleItems();
-  const colorSource = sourceItems.length > 0 ? sourceItems : state.items;
-  colorSource.forEach((item, index) => {
-    const baseHex = sanitizeColor(item?.color, index).toUpperCase();
+  const spinEntries = getSpinEntries();
+  const colorSource = spinEntries.length > 0
+    ? spinEntries.map((entry, index) => ({ color: getSpinEntryColor(entry), index }))
+    : state.items.map((item, index) => ({ color: sanitizeColor(item?.color, index), index }));
+  colorSource.forEach((row) => {
+    const baseHex = sanitizeColor(row.color, row.index).toUpperCase();
     const compHex = complementHexColor(baseHex);
     [baseHex, compHex].forEach((hex) => {
       if (!unique.has(hex)) {
@@ -1398,8 +1547,8 @@ function complementHexColor(hexColor) {
   return rgbToHex(255 - rgb.r, 255 - rgb.g, 255 - rgb.b);
 }
 
-function drawSegmentLabel(item, midAngle, radius) {
-  const text = shorten(formatWheelParticipantLabel(item), 22);
+function drawSegmentLabel(entry, midAngle, radius) {
+  const text = formatSpinEntryLabel(entry);
   const centerX = refs.canvas.width / 2;
   const centerY = refs.canvas.height / 2;
 
@@ -1436,6 +1585,40 @@ function formatWheelParticipantLabel(item) {
     return `${name} ${emoji}`.trim();
   }
   return `${emoji} ${name} ${emoji}`.trim();
+}
+
+function formatSpinEntryLabel(entry) {
+  if (!entry || typeof entry !== "object") {
+    return "";
+  }
+  if (entry.type === "retry") {
+    return shorten(formatRetryWheelLabel(), 22);
+  }
+  return shorten(formatWheelParticipantLabel(entry.item), 22);
+}
+
+function formatRetryWheelLabel() {
+  const mode = sanitizeWheelEmojiMode(state.wheelEmojiMode);
+  if (mode === "none") {
+    return RETRY_SLICE_LABEL;
+  }
+  if (mode === "prefix") {
+    return `${RETRY_SLICE_EMOJI} ${RETRY_SLICE_LABEL}`.trim();
+  }
+  if (mode === "suffix") {
+    return `${RETRY_SLICE_LABEL} ${RETRY_SLICE_EMOJI}`.trim();
+  }
+  return `${RETRY_SLICE_EMOJI} ${RETRY_SLICE_LABEL} ${RETRY_SLICE_EMOJI}`.trim();
+}
+
+function getSpinEntryColor(entry) {
+  if (!entry || typeof entry !== "object") {
+    return sanitizeColor(undefined, 0);
+  }
+  if (entry.type === "retry") {
+    return sanitizeRetrySliceColor(entry.color || state.retrySliceColor);
+  }
+  return sanitizeColor(entry.item?.color);
 }
 
 function drawLabelRadial(text, midAngle, radius, centerX, centerY) {
@@ -1493,9 +1676,14 @@ function spinWheel() {
   if (requestEmojiHoseStop(true)) {
     return;
   }
-  const spinItems = getVisibleItems();
-  if (spinItems.length < MIN_PARTICIPANTS) {
+  const visibleParticipants = getVisibleItems();
+  if (visibleParticipants.length < MIN_PARTICIPANTS) {
     setMessage("La rula necesita al menos 2 participantes visibles.", "error");
+    return;
+  }
+  const spinEntries = getSpinEntries();
+  if (spinEntries.length < MIN_PARTICIPANTS) {
+    setMessage("No hay suficientes secciones disponibles para girar.", "error");
     return;
   }
 
@@ -1508,13 +1696,13 @@ function spinWheel() {
   refs.resultText.textContent = "Girando...";
   setMessage("");
 
-  const winnerIndex = weightedRandomIndex(spinItems);
+  const winnerIndex = weightedRandomIndex(spinEntries);
   if (winnerIndex < 0) {
     setControlsDisabled(false);
     isSpinning = false;
     setRimLightMode(RIM_LIGHT_MODE.STANDBY);
-    setMessage("No hay participantes visibles para girar.", "error");
-    refs.resultText.textContent = "Mostra al menos 2 participantes para girar.";
+    setMessage("No hay secciones visibles para girar.", "error");
+    refs.resultText.textContent = "Mostra al menos 2 participantes visibles para girar.";
     return;
   }
   const durationSec = randomInt(state.spinDurationMinSec, state.spinDurationMaxSec);
@@ -1523,7 +1711,7 @@ function spinWheel() {
   const maxTurns = clamp(Math.round(durationSec * 1.2), 3, 40);
   const turns = randomInt(minTurns, Math.max(minTurns, maxTurns));
 
-  const segments = getSegmentsDeg(spinItems);
+  const segments = getSegmentsDeg(spinEntries);
   const winnerSegment = segments[winnerIndex];
   const safeMargin = Math.min(winnerSegment.spanDeg * 0.2, 4);
   const insideDeg = randomFloat(
@@ -1581,32 +1769,42 @@ function stopSpinNow() {
 }
 
 function finalizeSpin(stoppedByClick) {
-  const spinItems = getVisibleItems();
-  if (spinItems.length === 0) {
+  const spinEntries = getSpinEntries();
+  if (spinEntries.length === 0) {
     isSpinning = false;
     activeSpin = null;
     setControlsDisabled(false);
-    refs.resultText.textContent = "No hay participantes visibles en la rula.";
-    setMessage("No se pudo resolver ganador porque no hay participantes visibles.", "error");
+    refs.resultText.textContent = "No hay secciones visibles en la rula.";
+    setMessage("No se pudo resolver resultado porque no hay secciones visibles.", "error");
     return;
   }
-  const winnerIndex = getWinnerIndexFromRotation(currentRotationDeg, spinItems);
+  const winnerIndex = getWinnerIndexFromRotation(currentRotationDeg, spinEntries);
   const safeIndex = winnerIndex < 0 ? 0 : winnerIndex;
-  const winnerItem = spinItems[safeIndex];
-  const winnerLabel = formatParticipantLabel(winnerItem);
+  const winnerEntry = spinEntries[safeIndex];
 
   isSpinning = false;
   activeSpin = null;
   setControlsDisabled(false);
-  refs.resultText.textContent = stoppedByClick
-    ? `Frenaste la rula. Le toca a ${winnerLabel}.`
-    : `Le toca a ${winnerLabel}.`;
+
+  if (winnerEntry?.type === "retry") {
+    refs.resultText.textContent = stoppedByClick
+      ? `${RETRY_SLICE_LABEL}. Volve a girar.`
+      : `${RETRY_SLICE_LABEL}. Nadie gana esta ronda.`;
+    playFailureTone();
+    const celebrationDurationMs = triggerRetryFailureCelebration();
+    startWinnerLights(Math.max(1000, celebrationDurationMs));
+    return;
+  }
+
+  const winnerItem = winnerEntry?.item;
+  const winnerLabel = formatParticipantLabel(winnerItem);
+  refs.resultText.textContent = `Ganó ${winnerLabel}.`;
   playWinApplause();
   const celebrationDurationMs = triggerWinnerCelebration(winnerItem);
   startWinnerLights(Math.max(1200, celebrationDurationMs));
 }
 
-function getWinnerIndexFromRotation(rotationDeg, items = getVisibleItems()) {
+function getWinnerIndexFromRotation(rotationDeg, items = getSpinEntries()) {
   if (!Array.isArray(items) || items.length === 0) {
     return -1;
   }
@@ -1640,7 +1838,7 @@ function countSegmentCrossings(previousRotationDeg, nextRotationDeg) {
     return 0;
   }
 
-  const boundaries = getSegmentBoundariesDeg(getVisibleItems());
+  const boundaries = getSegmentBoundariesDeg(getSpinEntries());
   if (boundaries.length === 0) {
     return 0;
   }
@@ -1672,7 +1870,7 @@ function countSegmentCrossings(previousRotationDeg, nextRotationDeg) {
   return count;
 }
 
-function getSegmentBoundariesDeg(items = getVisibleItems()) {
+function getSegmentBoundariesDeg(items = getSpinEntries()) {
   if (!Array.isArray(items) || items.length === 0) {
     return [];
   }
@@ -1752,6 +1950,25 @@ function playWinApplause() {
     scheduleClap(when, randomFloat(0.025, 0.055));
   }
   scheduleCrowdBed(now, 1.25);
+}
+
+function playFailureTone() {
+  if (!audioContext || audioContext.state !== "running") {
+    return;
+  }
+  const now = audioContext.currentTime + 0.01;
+  const oscillator = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+  oscillator.type = "sawtooth";
+  oscillator.frequency.setValueAtTime(520, now);
+  oscillator.frequency.exponentialRampToValueAtTime(180, now + 0.26);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.085, now + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.32);
+  oscillator.connect(gain);
+  gain.connect(audioContext.destination);
+  oscillator.start(now);
+  oscillator.stop(now + 0.35);
 }
 
 function scheduleClap(when, gainValue) {
@@ -1933,7 +2150,13 @@ function addParticipant() {
   });
   const visibleItems = getVisibleItems(state.items);
   if (visibleItems.length > 0) {
-    equalizePercentages(visibleItems);
+    equalizePercentages(
+      visibleItems,
+      getParticipantTargetUnits(
+        visibleItems.length,
+        getParticipantSharePctForConfig(state.retrySliceEnabled, state.retrySlicePct),
+      ),
+    );
   }
   saveState();
   render();
@@ -1946,7 +2169,10 @@ function removeParticipant(index) {
     return;
   }
   state.items.splice(index, 1);
-  normalizeVisiblePercentages(state.items);
+  normalizeVisiblePercentages(
+    state.items,
+    getParticipantSharePctForConfig(state.retrySliceEnabled, state.retrySlicePct),
+  );
   saveState();
   render();
   setMessage("Participante eliminado.", "success");
@@ -2088,7 +2314,40 @@ function setParticipantHidden(index, hidden) {
     return;
   }
   state.items[index].hidden = nextHidden;
-  normalizeVisiblePercentages(state.items);
+  normalizeVisiblePercentages(
+    state.items,
+    getParticipantSharePctForConfig(state.retrySliceEnabled, state.retrySlicePct),
+  );
+  saveState();
+  render();
+}
+
+function setRetrySliceEnabled(rawValue) {
+  const next = sanitizeRetrySliceEnabled(rawValue);
+  if (next === sanitizeRetrySliceEnabled(state.retrySliceEnabled)) {
+    renderItemList();
+    return;
+  }
+  state.retrySliceEnabled = next;
+  normalizeVisiblePercentages(
+    state.items,
+    getParticipantSharePctForConfig(state.retrySliceEnabled, state.retrySlicePct),
+  );
+  saveState();
+  render();
+}
+
+function setRetrySlicePct(rawValue) {
+  const next = sanitizeRetrySlicePct(rawValue);
+  if (next === sanitizeRetrySlicePct(state.retrySlicePct)) {
+    renderItemList();
+    return;
+  }
+  state.retrySlicePct = next;
+  normalizeVisiblePercentages(
+    state.items,
+    getParticipantSharePctForConfig(state.retrySliceEnabled, state.retrySlicePct),
+  );
   saveState();
   render();
 }
@@ -2106,9 +2365,13 @@ function setParticipantPercent(index, nextPct) {
     return;
   }
 
-  const maxUnits = TOTAL_UNITS - MIN_ITEM_UNITS * (visibleCount - 1);
+  const targetUnits = getParticipantTargetUnits(
+    visibleCount,
+    getParticipantSharePctForConfig(state.retrySliceEnabled, state.retrySlicePct),
+  );
+  const maxUnits = targetUnits - MIN_ITEM_UNITS * (visibleCount - 1);
   const editedUnits = clamp(Math.round(nextPct * 100), MIN_ITEM_UNITS, maxUnits);
-  const restUnits = TOTAL_UNITS - editedUnits;
+  const restUnits = targetUnits - editedUnits;
   const restExtraUnits = restUnits - MIN_ITEM_UNITS * (visibleCount - 1);
   const otherIndexes = visibleIndexes.filter((itemIndex) => itemIndex !== index);
   const otherWeights = otherIndexes.map((i) =>
@@ -2157,7 +2420,7 @@ function weightedRandomIndex(items) {
   return items.length - 1;
 }
 
-function getSegmentsDeg(items = getVisibleItems()) {
+function getSegmentsDeg(items = getSpinEntries()) {
   let start = 0;
   return items.map((item) => {
     const spanDeg = (item.pct / 100) * 360;
@@ -2167,13 +2430,17 @@ function getSegmentsDeg(items = getVisibleItems()) {
   });
 }
 
-function normalizePercentages(items) {
+function normalizePercentages(items, targetUnitsRaw = TOTAL_UNITS) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return;
+  }
+  const totalUnits = Math.max(MIN_ITEM_UNITS * items.length, Math.round(Number(targetUnitsRaw) || TOTAL_UNITS));
   if (items.length === 1) {
-    items[0].pct = 100;
+    items[0].pct = totalUnits / 100;
     return;
   }
   const minBase = MIN_ITEM_UNITS * items.length;
-  const extraPool = TOTAL_UNITS - minBase;
+  const extraPool = totalUnits - minBase;
   const weights = items.map((item) => Math.max(0, Number(item.pct) || 0));
   const distributed = distributeUnits(weights, extraPool);
   items.forEach((item, index) => {
@@ -2181,9 +2448,13 @@ function normalizePercentages(items) {
   });
 }
 
-function equalizePercentages(items) {
-  const base = Math.floor(TOTAL_UNITS / items.length);
-  let remainder = TOTAL_UNITS - base * items.length;
+function equalizePercentages(items, targetUnitsRaw = TOTAL_UNITS) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return;
+  }
+  const totalUnits = Math.max(MIN_ITEM_UNITS * items.length, Math.round(Number(targetUnitsRaw) || TOTAL_UNITS));
+  const base = Math.floor(totalUnits / items.length);
+  let remainder = totalUnits - base * items.length;
   items.forEach((item) => {
     let units = base;
     if (remainder > 0) {
@@ -2264,6 +2535,9 @@ function defaultState() {
     fontSizePx: DEFAULT_FONT_SIZE_PX,
     fontFamilyId: DEFAULT_FONT_FAMILY_ID,
     winnerAnimationMode: DEFAULT_WINNER_ANIMATION_MODE,
+    retrySliceEnabled: DEFAULT_RETRY_SLICE_ENABLED,
+    retrySlicePct: DEFAULT_RETRY_SLICE_PCT,
+    retrySliceColor: DEFAULT_RETRY_SLICE_COLOR,
     items,
   };
 }
@@ -2277,22 +2551,29 @@ function sanitizeState(input) {
   const rawItems = Array.isArray(input?.items) ? input.items.slice(0, MAX_PARTICIPANTS) : [];
 
   const items = rawItems
-    .map((item, index) => ({
-      id: typeof item?.id === "string" && item.id.trim() ? item.id.trim() : makeId(),
-      emoji: sanitizeEmoji(item?.emoji, index),
-      name: normalizeName(item?.name, index),
-      color: sanitizeColor(item?.color, index),
-      animationMode: sanitizeParticipantAnimationMode(item?.animationMode),
-      hidden: sanitizeParticipantHidden(item?.hidden),
-      pct: Number.isFinite(Number(item?.pct)) ? Number(item.pct) : 0,
-    }))
+    .map((item, index) => {
+      const emoji = sanitizeEmoji(item?.emoji, index);
+      const normalizedName = normalizeName(item?.name, index);
+      const migratedName = normalizedName === "Pipi" && emoji === "🐈‍⬛" ? "El pipi" : normalizedName;
+      return {
+        id: typeof item?.id === "string" && item.id.trim() ? item.id.trim() : makeId(),
+        emoji,
+        name: migratedName,
+        color: sanitizeColor(item?.color, index),
+        animationMode: sanitizeParticipantAnimationMode(item?.animationMode),
+        hidden: sanitizeParticipantHidden(item?.hidden),
+        pct: Number.isFinite(Number(item?.pct)) ? Number(item.pct) : 0,
+      };
+    })
     .filter((item) => item.name.length > 0);
 
   if (items.length < MIN_PARTICIPANTS) {
     return fallback;
   }
 
-  normalizeVisiblePercentages(items);
+  const retryEnabled = sanitizeRetrySliceEnabled(input?.retrySliceEnabled);
+  const retryPct = sanitizeRetrySlicePct(input?.retrySlicePct);
+  normalizeVisiblePercentages(items, getParticipantSharePctForConfig(retryEnabled, retryPct));
   return {
     version: CONFIG_VERSION,
     spinDurationMinSec: durationMin,
@@ -2303,6 +2584,9 @@ function sanitizeState(input) {
     fontSizePx: sanitizeFontSize(input?.fontSizePx),
     fontFamilyId: sanitizeFontFamily(input?.fontFamilyId),
     winnerAnimationMode: sanitizeWinnerAnimationMode(input?.winnerAnimationMode),
+    retrySliceEnabled: retryEnabled,
+    retrySlicePct: retryPct,
+    retrySliceColor: sanitizeRetrySliceColor(input?.retrySliceColor),
     items,
   };
 }
@@ -2318,6 +2602,9 @@ function saveState() {
     fontSizePx: sanitizeFontSize(state.fontSizePx),
     fontFamilyId: sanitizeFontFamily(state.fontFamilyId),
     winnerAnimationMode: sanitizeWinnerAnimationMode(state.winnerAnimationMode),
+    retrySliceEnabled: sanitizeRetrySliceEnabled(state.retrySliceEnabled),
+    retrySlicePct: sanitizeRetrySlicePct(state.retrySlicePct),
+    retrySliceColor: sanitizeRetrySliceColor(state.retrySliceColor),
     items: state.items.map((item, index) => ({
       id: item.id,
       emoji: sanitizeEmoji(item.emoji, index),
@@ -2493,6 +2780,30 @@ function sanitizeParticipantHidden(value) {
   return value === true;
 }
 
+function sanitizeRetrySliceEnabled(value) {
+  return value === true;
+}
+
+function sanitizeRetrySlicePct(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_RETRY_SLICE_PCT;
+  }
+  return clamp(Math.round(parsed), MIN_RETRY_SLICE_PCT, MAX_RETRY_SLICE_PCT);
+}
+
+function sanitizeRetrySliceColor(value) {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  if (/^#[0-9a-fA-F]{6}$/.test(normalized)) {
+    return normalized.toUpperCase();
+  }
+  return DEFAULT_RETRY_SLICE_COLOR;
+}
+
+function isRetrySliceColorIndex(index) {
+  return Number(index) === RETRY_SLICE_COLOR_INDEX;
+}
+
 function getVisibleItems(items = state.items) {
   if (!Array.isArray(items)) {
     return [];
@@ -2500,20 +2811,73 @@ function getVisibleItems(items = state.items) {
   return items.filter((item) => !sanitizeParticipantHidden(item?.hidden));
 }
 
+function getSpinEntries() {
+  const participants = getVisibleItems();
+  if (participants.length === 0) {
+    return [];
+  }
+
+  const retryEnabled = sanitizeRetrySliceEnabled(state.retrySliceEnabled);
+  const retryPct = retryEnabled ? sanitizeRetrySlicePct(state.retrySlicePct) : 0;
+  const entries = participants.map((item) => ({
+    type: "participant",
+    item,
+    pct: Math.max(0, Number(item?.pct) || 0),
+  }));
+
+  if (retryEnabled && retryPct > 0) {
+    entries.push({
+      type: "retry",
+      label: RETRY_SLICE_LABEL,
+      color: sanitizeRetrySliceColor(state.retrySliceColor),
+      pct: retryPct,
+    });
+  }
+
+  const total = entries.reduce((acc, entry) => acc + Math.max(0, Number(entry?.pct) || 0), 0);
+  if (total <= 0) {
+    return [];
+  }
+
+  return entries
+    .map((entry) => ({
+      ...entry,
+      pct: (Math.max(0, Number(entry?.pct) || 0) / total) * 100,
+    }))
+    .filter((entry) => entry.pct > 0);
+}
+
 function getVisibleParticipantCount(items = state.items) {
   return getVisibleItems(items).length;
 }
 
-function normalizeVisiblePercentages(items) {
+function normalizeVisiblePercentages(items, participantSharePct = 100) {
   const visibleItems = getVisibleItems(items);
   if (visibleItems.length === 0) {
     return;
   }
+  const targetUnits = getParticipantTargetUnits(visibleItems.length, participantSharePct);
   if (visibleItems.length === 1) {
-    visibleItems[0].pct = 100;
+    visibleItems[0].pct = targetUnits / 100;
     return;
   }
-  normalizePercentages(visibleItems);
+  normalizePercentages(visibleItems, targetUnits);
+}
+
+function getParticipantSharePctForConfig(retryEnabledValue, retryPctValue) {
+  const retryEnabled = sanitizeRetrySliceEnabled(retryEnabledValue);
+  if (!retryEnabled) {
+    return 100;
+  }
+  const retryPct = sanitizeRetrySlicePct(retryPctValue);
+  return clamp(100 - retryPct, 0, 100);
+}
+
+function getParticipantTargetUnits(visibleCount, participantSharePct = 100) {
+  const count = Math.max(0, Math.floor(Number(visibleCount) || 0));
+  const minUnits = MIN_ITEM_UNITS * count;
+  const desiredUnits = Math.round(clamp(Number(participantSharePct) || 0, 0, 100) * 100);
+  return Math.max(minUnits, desiredUnits);
 }
 
 function normalizeName(rawName, index = 0) {
@@ -2527,7 +2891,8 @@ function sanitizeColor(rawColor, index = 0) {
   if (/^#[0-9a-fA-F]{6}$/.test(color)) {
     return color;
   }
-  return PALETTE[index % PALETTE.length];
+  const safeIndex = ((index % PALETTE.length) + PALETTE.length) % PALETTE.length;
+  return PALETTE[safeIndex];
 }
 
 function normalizeHexColorInput(rawValue) {
@@ -2775,7 +3140,7 @@ function pickRandomEmojiFromFilter() {
     return;
   }
   const emoji = candidates[randomInt(0, candidates.length - 1)];
-  setEmojiFromModal(emoji, true);
+  setEmojiFromModal(emoji);
 }
 
 function buildEmojiSections() {
@@ -3721,22 +4086,28 @@ function spawnConfettiDrops() {
 function spawnStarDrops() {
   let maxDropMs = 0;
   const stars = ["⭐", "🌟", "✨", "💫"];
-  const count = 56;
+  const count = 62;
+  const immediateBurstCount = 22;
+  const fragment = document.createDocumentFragment();
   for (let i = 0; i < count; i += 1) {
     const drop = document.createElement("span");
     drop.className = "winner-star-drop";
     drop.textContent = stars[randomInt(0, stars.length - 1)];
     drop.style.left = `${Math.random() * 100}%`;
     drop.style.fontSize = `${randomInt(20, 46)}px`;
-    const durationSec = randomFloat(2.6, 5.4);
-    const delaySec = randomFloat(0, 1.05);
+    const durationSec = randomFloat(2.2, 4.8);
+    const delaySec =
+      i < immediateBurstCount
+        ? randomFloat(0, 0.12)
+        : randomFloat(0.08, 0.58);
     drop.style.animationDuration = `${durationSec.toFixed(2)}s`;
     drop.style.animationDelay = `${delaySec.toFixed(2)}s`;
     drop.style.setProperty("--drift-x", `${randomInt(-150, 150)}px`);
     drop.style.setProperty("--spin", `${randomInt(-260, 260)}deg`);
     maxDropMs = Math.max(maxDropMs, (durationSec + delaySec) * 1000);
-    refs.emojiRain.append(drop);
+    fragment.append(drop);
   }
+  refs.emojiRain.append(fragment);
   return maxDropMs;
 }
 
@@ -3903,6 +4274,39 @@ function spawnNeonPulseDrops(emoji) {
     refs.emojiRain.append(drop);
   }
   return Math.max(maxDropMs, 6200);
+}
+
+function spawnRetryFailureDrops() {
+  let maxDropMs = 0;
+  const symbols = ["💥", "❌", "🔁", "⚠️"];
+  const count = 52;
+  for (let i = 0; i < count; i += 1) {
+    const drop = document.createElement("span");
+    drop.className = "retry-failure-drop";
+    drop.textContent = symbols[randomInt(0, symbols.length - 1)];
+    drop.style.left = `${Math.random() * 100}%`;
+    drop.style.fontSize = `${randomInt(18, 46)}px`;
+    const durationSec = randomFloat(1.2, 2.7);
+    const delaySec = randomFloat(0, 0.45);
+    drop.style.animationDuration = `${durationSec.toFixed(2)}s`;
+    drop.style.animationDelay = `${delaySec.toFixed(2)}s`;
+    drop.style.setProperty("--drift-x", `${randomInt(-170, 170)}px`);
+    drop.style.setProperty("--spin", `${randomInt(-460, 460)}deg`);
+    maxDropMs = Math.max(maxDropMs, (durationSec + delaySec) * 1000);
+    refs.emojiRain.append(drop);
+  }
+  return Math.max(maxDropMs, 1400);
+}
+
+function triggerRetryFailureCelebration() {
+  clearWinnerCelebrationVisuals();
+  refs.resultText.classList.add("result-failure-retry");
+  const maxDropMs = spawnRetryFailureDrops();
+  const celebrationDurationMs = Math.ceil(maxDropMs) + 240;
+  celebrationTimeoutId = window.setTimeout(() => {
+    clearWinnerCelebrationVisuals();
+  }, celebrationDurationMs);
+  return celebrationDurationMs;
 }
 
 function triggerWinnerCelebration(winnerItem) {
