@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Toca toca</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Alfa+Slab+One&family=Barlow+Condensed:wght@500;600;700&family=Cinzel+Decorative:wght@700&family=Cinzel:wght@600;700&family=Cormorant+Garamond:wght@600;700&family=Marcellus+SC&family=Montserrat:wght@400;500;600;700&family=Playfair+Display+SC:wght@700;900&family=Prata&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <button
+      id="configPanelToggle"
+      class="config-panel-toggle"
+      type="button"
+      aria-controls="configPanel"
+      aria-expanded="false"
+      aria-label="Abrir configuracion"
+      title="Abrir configuracion"
+    >
+      ⚙
+    </button>
+    <button
+      id="infoPanelToggle"
+      class="info-panel-toggle"
+      type="button"
+      aria-controls="infoModal"
+      aria-expanded="false"
+      aria-label="Abrir informacion"
+      title="Abrir informacion"
+    >
+      i
+    </button>
+    <div id="configBackdrop" class="config-backdrop" hidden></div>
+    <div id="bgEmojiRain" class="bg-emoji-rain" aria-hidden="true"></div>
+    <main class="page">
+      <section class="wheel-card">
+        <header class="hero">
+          <h1>Toca Toca</h1>
+          <p class="subtitle">la suerte es loca</p>
+        </header>
+
+        <div class="wheel-wrap">
+          <canvas
+            id="wheelCanvas"
+            width="520"
+            height="520"
+            aria-label="Rula de seleccion de nombres"
+          ></canvas>
+          <div id="wheelPointer" class="pointer" aria-hidden="true"></div>
+        </div>
+
+        <div class="spin-panel">
+          <p id="resultText" aria-live="polite">Toca la rula para girar.</p>
+        </div>
+      </section>
+    </main>
+
+    <aside id="configPanel" class="controls-card side-panel" aria-hidden="true">
+      <header class="side-panel-header">
+        <h2>Configuracion</h2>
+        <button
+          id="configPanelClose"
+          class="side-panel-close"
+          type="button"
+          aria-label="Cerrar configuracion"
+          title="Cerrar configuracion"
+        >
+          ✕
+        </button>
+      </header>
+      <div class="config-body">
+        <details class="panel-settings" id="wheelSettings" open>
+          <summary>Ajustes de rula</summary>
+
+          <div class="duration-control">
+            <label id="durationLabel" for="durationRangeMin">Duracion aleatoria: 5s - 8s</label>
+            <div class="duration-dual-slider">
+              <input
+                id="durationRangeMin"
+                type="range"
+                min="1"
+                max="60"
+                step="1"
+                value="5"
+                aria-label="Duracion minima de giro"
+              />
+              <input
+                id="durationRangeMax"
+                type="range"
+                min="1"
+                max="60"
+                step="1"
+                value="8"
+                aria-label="Duracion maxima de giro"
+              />
+            </div>
+            <div class="duration-inputs">
+              <label class="duration-number-field" for="durationMinNumber">
+                <span>Minimo (s)</span>
+                <input
+                  id="durationMinNumber"
+                  type="number"
+                  min="1"
+                  max="60"
+                  step="1"
+                  value="5"
+                  aria-label="Duracion minima en segundos"
+                />
+              </label>
+              <label class="duration-number-field" for="durationMaxNumber">
+                <span>Maximo (s)</span>
+                <input
+                  id="durationMaxNumber"
+                  type="number"
+                  min="1"
+                  max="60"
+                  step="1"
+                  value="8"
+                  aria-label="Duracion maxima en segundos"
+                />
+              </label>
+            </div>
+          </div>
+
+          <div class="text-layout-control">
+            <label for="textLayoutSelect">Disposicion de nombres</label>
+            <select id="textLayoutSelect">
+              <option value="radial">Radial (centro hacia afuera)</option>
+              <option value="tangent">Tangencial (siguiendo el aro)</option>
+              <option value="horizontal">Horizontal (siempre derecha)</option>
+            </select>
+          </div>
+
+          <div class="text-layout-control">
+            <label for="emojiDisplaySelect">Emoji en nombre (rula)</label>
+            <select id="emojiDisplaySelect" aria-label="Mostrar emoji en nombre de la rula">
+              <option value="both">En ambos lados</option>
+              <option value="prefix">Solo al inicio</option>
+              <option value="suffix" selected>Solo al final</option>
+              <option value="none">Sin emoji</option>
+            </select>
+          </div>
+
+          <div class="text-layout-control">
+            <label id="textPositionLabel" for="textPositionRange">Posicion en la seccion: 54%</label>
+            <input
+              id="textPositionRange"
+              type="range"
+              min="30"
+              max="80"
+              step="1"
+              value="54"
+            />
+          </div>
+
+          <div class="text-layout-control">
+            <label id="fontSizeLabel" for="fontSizeRange">Tamano de fuente: 26px</label>
+            <input id="fontSizeRange" type="range" min="12" max="30" step="1" value="26" />
+          </div>
+
+          <div class="text-layout-control">
+            <label for="fontFamilySelect">Fuente de la rula</label>
+            <select id="fontFamilySelect" aria-label="Fuente del texto en la rula"></select>
+          </div>
+
+          <div class="text-layout-control">
+            <label for="winAnimationSelect">Animacion al ganar</label>
+            <select id="winAnimationSelect" aria-label="Animacion al ganar">
+              <option value="random">🎲 Aleatorio</option>
+              <option value="emojiRain">🌧️ Lluvia de emojis (clasica)</option>
+              <option value="emojiRainExtreme">🌊 Lluvia de emojis (extrema)</option>
+              <option value="emojiHose">🚿 Manguera de emojis</option>
+              <option value="fuegosArtificiales">🎆 Fuegos artificiales</option>
+              <option value="cartaBlanca">🃏 Carta blanca</option>
+              <option value="emojiBounce">🪀 Rebote emoji</option>
+              <option value="confeti">🎉 Confeti</option>
+              <option value="estrellas">✨ Estrellas</option>
+              <option value="neonPulse">⚡ Pulso neon</option>
+            </select>
+          </div>
+        </details>
+
+        <details class="panel-settings participants-settings" open>
+          <summary>Participantes</summary>
+          <p class="hint">Nombre, emoji, color, porcentaje, animacion y visibilidad</p>
+          <div id="itemList" class="item-list"></div>
+
+          <div class="actions">
+            <button id="addItemButton" type="button">Agregar participante</button>
+            <button id="resetButton" class="secondary" type="button">Restablecer</button>
+          </div>
+        </details>
+      </div>
+
+      <p id="formMessage" class="form-message" role="status" aria-live="polite"></p>
+    </aside>
+    <div id="emojiRain" class="emoji-rain" aria-hidden="true"></div>
+    <div id="colorModal" class="color-modal" hidden>
+      <div class="color-modal-backdrop" data-close-color-modal></div>
+      <section class="color-modal-content" role="dialog" aria-modal="true" aria-labelledby="colorModalTitle">
+        <header class="color-modal-header">
+          <h3 id="colorModalTitle">Elegir color</h3>
+          <div class="modal-header-actions">
+            <button
+              id="colorRandomButton"
+              class="mini-action icon-only"
+              type="button"
+              aria-label="Elegir color aleatorio"
+              title="Color aleatorio"
+            >
+              🎲
+            </button>
+            <button
+              id="colorModalCancel"
+              class="mini-action icon-only color-modal-cancel"
+              type="button"
+              aria-label="Cancelar cambios de color"
+              title="Cancelar cambios"
+            >
+              ❌
+            </button>
+            <button
+              id="colorModalConfirm"
+              class="mini-action icon-only color-modal-confirm"
+              type="button"
+              aria-label="Confirmar color"
+              title="Confirmar color"
+            >
+              ✅
+            </button>
+          </div>
+        </header>
+        <div class="color-preview-row">
+          <span id="colorPreviewSwatch" class="color-preview-swatch" aria-hidden="true"></span>
+          <code id="colorHexValue" class="color-hex-value">#000000</code>
+        </div>
+        <label class="color-code-field" for="colorHexInput">
+          <span>Codigo hexadecimal</span>
+          <input
+            id="colorHexInput"
+            type="text"
+            value="#000000"
+            maxlength="7"
+            spellcheck="false"
+            aria-label="Color en formato hexadecimal"
+          />
+        </label>
+        <p class="color-modal-hint">Elegi por grilla, RGB o codigo.</p>
+        <label class="color-palette-field" for="colorPaletteSelect">
+          <span>Paleta</span>
+          <select id="colorPaletteSelect" aria-label="Seleccionar paleta de colores"></select>
+        </label>
+        <div id="colorPresetGrid" class="color-preset-grid"></div>
+        <div class="rgb-controls">
+          <label for="colorRRange">R</label>
+          <input id="colorRRange" type="range" min="0" max="255" step="1" value="0" />
+          <input id="colorRNumber" type="number" min="0" max="255" step="1" value="0" />
+
+          <label for="colorGRange">G</label>
+          <input id="colorGRange" type="range" min="0" max="255" step="1" value="0" />
+          <input id="colorGNumber" type="number" min="0" max="255" step="1" value="0" />
+
+          <label for="colorBRange">B</label>
+          <input id="colorBRange" type="range" min="0" max="255" step="1" value="0" />
+          <input id="colorBNumber" type="number" min="0" max="255" step="1" value="0" />
+        </div>
+      </section>
+    </div>
+    <div id="emojiModal" class="color-modal emoji-modal" hidden>
+      <div class="color-modal-backdrop" data-close-emoji-modal></div>
+      <section class="color-modal-content emoji-modal-content" role="dialog" aria-modal="true" aria-labelledby="emojiModalTitle">
+        <header class="color-modal-header">
+          <h3 id="emojiModalTitle">Elegir emoji</h3>
+          <div class="modal-header-actions">
+            <button
+              id="emojiRandomButton"
+              class="mini-action icon-only"
+              type="button"
+              aria-label="Elegir emoji aleatorio"
+              title="Emoji aleatorio"
+            >
+              🎲
+            </button>
+            <button
+              id="emojiModalClose"
+              class="color-modal-close"
+              type="button"
+              aria-label="Cerrar selector de emoji"
+              title="Cerrar selector de emoji"
+            >
+              ✕
+            </button>
+          </div>
+        </header>
+        <label class="color-code-field" for="emojiSearchInput">
+          <span>Buscar</span>
+          <input
+            id="emojiSearchInput"
+            type="text"
+            maxlength="16"
+            spellcheck="false"
+            placeholder="Filtrar por emoji o categoria"
+            aria-label="Buscar emoji"
+          />
+        </label>
+        <label class="color-code-field" for="emojiNativeInput">
+          <span>Emoji personalizado (selector nativo del sistema)</span>
+          <input
+            id="emojiNativeInput"
+            type="text"
+            maxlength="16"
+            spellcheck="false"
+            placeholder="😀"
+            aria-label="Emoji personalizado"
+          />
+        </label>
+        <div id="emojiSections" class="emoji-sections" aria-label="Lista de emojis por categoria"></div>
+      </section>
+    </div>
+    <div id="infoModal" class="color-modal info-modal" hidden>
+      <div class="color-modal-backdrop" data-close-info-modal></div>
+      <section class="color-modal-content info-modal-content" role="dialog" aria-modal="true" aria-labelledby="infoModalTitle">
+        <header class="color-modal-header">
+          <h3 id="infoModalTitle">Informacion</h3>
+          <button
+            id="infoModalClose"
+            class="color-modal-close"
+            type="button"
+            aria-label="Cerrar informacion"
+            title="Cerrar informacion"
+          >
+            ✕
+          </button>
+        </header>
+
+        <section class="info-block">
+          <h4>Toca Toca</h4>
+          <p>Rula de nombres personalizable.</p>
+          <p><strong>Version actual:</strong> v0.0.1</p>
+          <p>
+            Creado por
+            <a href="https://github.com/facundoraulbistolfi" target="_blank" rel="noopener noreferrer">Facundo Bistolfi</a>
+            🧉 🇦🇷.
+          </p>
+          <p>
+            Desarrollado con ayuda de
+            <a href="https://openai.com/codex" target="_blank" rel="noopener noreferrer">Codex</a>
+            <span class="codex-mark" aria-hidden="true">⬢</span>.
+          </p>
+        </section>
+
+        <section class="info-block">
+          <h4>Changelog</h4>
+          <ul class="changelog-list">
+            <li><strong>v0.0.1</strong> - MVP funcional inicial publicado para iterar la rula.</li>
+          </ul>
+        </section>
+      </section>
+    </div>
+    <div id="resetConfirmModal" class="color-modal reset-confirm-modal" hidden>
+      <div class="color-modal-backdrop" data-close-reset-modal></div>
+      <section class="color-modal-content reset-confirm-content" role="dialog" aria-modal="true" aria-labelledby="resetConfirmTitle">
+        <header class="color-modal-header">
+          <h3 id="resetConfirmTitle">Confirmar restablecimiento</h3>
+          <button
+            id="resetConfirmClose"
+            class="color-modal-close"
+            type="button"
+            aria-label="Cerrar confirmacion"
+            title="Cerrar confirmacion"
+          >
+            ✕
+          </button>
+        </header>
+        <p class="reset-confirm-text">
+          Se va a perder la configuracion actual de participantes, colores, emojis, porcentajes y ajustes de giro.
+        </p>
+        <p class="reset-confirm-text">
+          Esta accion no se puede deshacer.
+        </p>
+        <div class="reset-confirm-actions">
+          <button id="resetConfirmAccept" type="button">Confirmar</button>
+          <button id="resetConfirmCancel" class="secondary" type="button">Volver</button>
+        </div>
+      </section>
+    </div>
+    <script src="app.js" defer></script>
+  </body>
+</html>
