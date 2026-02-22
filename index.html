@@ -26,6 +26,16 @@
       ⚙
     </button>
     <button
+      id="soundToggle"
+      class="sound-toggle"
+      type="button"
+      aria-pressed="false"
+      aria-label="Silenciar sonido"
+      title="Silenciar sonido"
+    >
+      🔊
+    </button>
+    <button
       id="infoPanelToggle"
       class="info-panel-toggle"
       type="button"
@@ -140,10 +150,10 @@
           <div class="text-layout-control">
             <label for="emojiDisplaySelect">Emoji en nombre (rula)</label>
             <select id="emojiDisplaySelect" aria-label="Mostrar emoji en nombre de la rula">
-              <option value="both">En ambos lados</option>
-              <option value="prefix">Solo al inicio</option>
-              <option value="suffix" selected>Solo al final</option>
-              <option value="none">Sin emoji</option>
+              <option value="both">↔️ En ambos lados</option>
+              <option value="prefix">⬅️ Solo al inicio</option>
+              <option value="suffix" selected>➡️ Solo al final</option>
+              <option value="none">🚫 Sin emoji</option>
             </select>
           </div>
 
@@ -275,6 +285,7 @@
     <div id="emojiModal" class="color-modal emoji-modal" hidden>
       <div class="color-modal-backdrop" data-close-emoji-modal></div>
       <section class="color-modal-content emoji-modal-content" role="dialog" aria-modal="true" aria-labelledby="emojiModalTitle">
+        <div id="emojiModalBurst" class="emoji-modal-burst" aria-hidden="true"></div>
         <header class="color-modal-header">
           <h3 id="emojiModalTitle">Elegir emoji</h3>
           <div class="modal-header-actions">
@@ -307,6 +318,15 @@
             </button>
           </div>
         </header>
+        <button
+          id="emojiSelectedPreview"
+          class="emoji-selected-preview"
+          type="button"
+          aria-label="Emoji seleccionado"
+          title="Emoji seleccionado (toca para personalizar)"
+        >
+          😀
+        </button>
         <label class="color-code-field" for="emojiSearchInput">
           <span>Buscar</span>
           <input
@@ -318,17 +338,16 @@
             aria-label="Buscar emoji"
           />
         </label>
-        <label class="color-code-field" for="emojiNativeInput">
-          <span>Emoji personalizado (selector nativo del sistema)</span>
-          <input
-            id="emojiNativeInput"
-            type="text"
-            maxlength="16"
-            spellcheck="false"
-            placeholder="😀"
-            aria-label="Emoji personalizado"
-          />
-        </label>
+        <input
+          id="emojiNativeInput"
+          class="emoji-native-input"
+          type="text"
+          maxlength="16"
+          spellcheck="false"
+          placeholder="😀"
+          aria-label="Emoji personalizado"
+          autocomplete="off"
+        />
         <div id="emojiSections" class="emoji-sections" aria-label="Lista de emojis por categoria"></div>
       </section>
     </div>
@@ -355,7 +374,16 @@
           <p>
             Creado por
             <a href="https://github.com/facundoraulbistolfi" target="_blank" rel="noopener noreferrer">Facundo Bistolfi</a>
-            🧉 🇦🇷.
+            🧉
+            <button
+              id="argentinaFlagButton"
+              class="info-flag-trigger"
+              type="button"
+              aria-label="Reproducir melodia de Oid mortales el grito sagrado"
+              title="Reproducir melodia patria"
+            >
+              🇦🇷
+            </button>.
           </p>
           <p>
             Desarrollado con ayuda de

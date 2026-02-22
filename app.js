@@ -96,6 +96,13 @@ const DEFAULT_RETRY_SLICE_PCT = 12;
 const MIN_RETRY_SLICE_PCT = 1;
 const MAX_RETRY_SLICE_PCT = 70;
 const DEFAULT_RETRY_SLICE_COLOR = "#6A1E2A";
+const DEFAULT_SOUND_MUTED = false;
+const ARGENTINA_ANTHEM_AUDIO_URL =
+  "https://upload.wikimedia.org/wikipedia/commons/7/77/Himno_Nacional_Argentino_%28instrumental%29.ogg";
+const ARGENTINA_ANTHEM_SNIPPET_START_SEC = 0;
+const ARGENTINA_ANTHEM_SNIPPET_DURATION_SEC = 12.5;
+const ARGENTINA_ANTHEM_SNIPPET_FADE_MS = 560;
+const ARGENTINA_ANTHEM_VOLUME = 0.84;
 const PARTICIPANT_ANIMATION_OPTIONS = [
   { id: "general", emoji: "🌐", label: "General (usar ajuste global)" },
   ...WINNER_ANIMATION_OPTIONS
@@ -144,6 +151,43 @@ const BG_RAIN_MIN_DELAY_MS = 180;
 const BG_RAIN_MAX_DELAY_MS = 340;
 const BG_RAIN_MAX_ACTIVE_DROPS = 64;
 const DEFAULT_EMOJIS = ["😀", "😎", "🤖", "🔥", "🍀", "🚀", "🎯", "⭐", "⚡", "🌈"];
+const AMERICA_REGION_CODES = [
+  "AG",
+  "AR",
+  "BS",
+  "BB",
+  "BZ",
+  "BO",
+  "BR",
+  "CA",
+  "CL",
+  "CO",
+  "CR",
+  "CU",
+  "DM",
+  "DO",
+  "EC",
+  "SV",
+  "GD",
+  "GT",
+  "GY",
+  "HT",
+  "HN",
+  "JM",
+  "MX",
+  "NI",
+  "PA",
+  "PY",
+  "PE",
+  "KN",
+  "LC",
+  "VC",
+  "SR",
+  "TT",
+  "US",
+  "UY",
+  "VE",
+];
 const EMOJI_SECTIONS = buildEmojiSections();
 const EMOJI_OPTIONS = EMOJI_SECTIONS.flatMap((section) => section.items);
 const EMOJI_NAME_INDEX = buildEmojiNameIndex(EMOJI_SECTIONS);
@@ -184,6 +228,7 @@ const refs = {
   wheelCard: document.querySelector(".wheel-card"),
   hero: document.querySelector(".hero"),
   configPanelToggle: document.getElementById("configPanelToggle"),
+  soundToggle: document.getElementById("soundToggle"),
   infoPanelToggle: document.getElementById("infoPanelToggle"),
   configPanelClose: document.getElementById("configPanelClose"),
   configPanel: document.getElementById("configPanel"),
@@ -227,14 +272,17 @@ const refs = {
   colorGNumber: document.getElementById("colorGNumber"),
   colorBNumber: document.getElementById("colorBNumber"),
   emojiModal: document.getElementById("emojiModal"),
+  emojiModalBurst: document.getElementById("emojiModalBurst"),
   emojiModalCancel: document.getElementById("emojiModalCancel"),
   emojiModalConfirm: document.getElementById("emojiModalConfirm"),
   emojiRandomButton: document.getElementById("emojiRandomButton"),
   emojiSearchInput: document.getElementById("emojiSearchInput"),
+  emojiSelectedPreview: document.getElementById("emojiSelectedPreview"),
   emojiNativeInput: document.getElementById("emojiNativeInput"),
   emojiSections: document.getElementById("emojiSections"),
   infoModal: document.getElementById("infoModal"),
   infoModalClose: document.getElementById("infoModalClose"),
+  argentinaFlagButton: document.getElementById("argentinaFlagButton"),
   resetConfirmModal: document.getElementById("resetConfirmModal"),
   resetConfirmClose: document.getElementById("resetConfirmClose"),
   resetConfirmAccept: document.getElementById("resetConfirmAccept"),
@@ -265,9 +313,15 @@ let winnerCardCascadeRafId = null;
 let winnerEmojiBounceRafId = null;
 let winnerEmojiHoseRafId = null;
 let winnerEmojiHoseController = null;
+let emojiModalHoseRafId = null;
+let emojiModalHoseController = null;
 let winnerFireworkTimeoutIds = [];
 let trackedCursorX = Number.NaN;
 let trackedCursorY = Number.NaN;
+let audioWarmupDone = false;
+let argentinaAnthemAudio = null;
+let argentinaAnthemStopTimeoutId = null;
+let argentinaAnthemFadeRafId = null;
 
 init();
 
@@ -277,6 +331,7 @@ function init() {
   initColorModal();
   initEmojiModal();
   bindEvents();
+  bindAudioUnlockEvents();
   document.body.classList.remove("theme-light");
   render();
   setRimLightMode(RIM_LIGHT_MODE.STANDBY);
@@ -290,6 +345,7 @@ function bindEvents() {
   refs.addItemButton.addEventListener("click", addParticipant);
   refs.resetButton.addEventListener("click", openResetConfirmModal);
   refs.configPanelToggle.addEventListener("click", toggleConfigPanel);
+  refs.soundToggle.addEventListener("click", () => setSoundMuted(!state.soundMuted));
   refs.infoPanelToggle.addEventListener("click", openInfoModal);
   refs.configPanelClose.addEventListener("click", () => closeConfigPanel(true));
   refs.configBackdrop.addEventListener("click", () => closeConfigPanel(true));
@@ -381,6 +437,19 @@ function bindEvents() {
   refs.emojiModalCancel.addEventListener("click", closeEmojiModal);
   refs.emojiModalConfirm.addEventListener("click", confirmEmojiModalSelection);
   refs.emojiRandomButton.addEventListener("click", pickRandomEmojiFromFilter);
+  refs.emojiSelectedPreview.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+    event.preventDefault();
+    spawnEmojiModalPreviewHose(activeEmojiDraft || refs.emojiSelectedPreview.textContent, {
+      sustainWhilePressed: true,
+    });
+    refs.emojiNativeInput.focus();
+  });
+  refs.emojiSelectedPreview.addEventListener("click", () => {
+    refs.emojiNativeInput.focus();
+  });
   refs.emojiSearchInput.addEventListener("input", () => {
     renderEmojiSections(refs.emojiSearchInput.value);
   });
@@ -401,6 +470,9 @@ function bindEvents() {
     }
   });
   refs.infoModalClose.addEventListener("click", closeInfoModal);
+  if (refs.argentinaFlagButton instanceof HTMLElement) {
+    refs.argentinaFlagButton.addEventListener("click", playArgentinaAnthemSnippet);
+  }
   refs.resetConfirmModal.addEventListener("click", (event) => {
     if (event.target instanceof HTMLElement && event.target.hasAttribute("data-close-reset-modal")) {
       closeResetConfirmModal();
@@ -409,6 +481,9 @@ function bindEvents() {
   refs.resetConfirmClose.addEventListener("click", closeResetConfirmModal);
   refs.resetConfirmCancel.addEventListener("click", closeResetConfirmModal);
   refs.resetConfirmAccept.addEventListener("click", confirmResetState);
+  window.addEventListener("pointerup", requestStopEmojiModalPreviewHose, { passive: true });
+  window.addEventListener("pointercancel", requestStopEmojiModalPreviewHose, { passive: true });
+  window.addEventListener("blur", requestStopEmojiModalPreviewHose);
   window.addEventListener("pointermove", updateTrackedCursorFromEvent, { passive: true });
   window.addEventListener("touchmove", updateTrackedCursorFromTouchEvent, { passive: true });
 
@@ -576,6 +651,7 @@ function openInfoModal() {
 function closeInfoModal() {
   refs.infoModal.hidden = true;
   refs.infoPanelToggle.setAttribute("aria-expanded", "false");
+  stopArgentinaAnthemSnippet(true);
   refs.infoPanelToggle.focus();
 }
 
@@ -654,6 +730,7 @@ function renderColorPresetGrid(selectedColor) {
 
 function renderEmojiSections(rawFilter) {
   const selectedEmoji = activeEmojiIndex === null ? null : sanitizeEmoji(activeEmojiDraft, activeEmojiIndex);
+  syncEmojiModalPreview(selectedEmoji || "😀");
   const sections = getFilteredEmojiSections(rawFilter);
   refs.emojiSections.replaceChildren();
   let hasMatches = false;
@@ -707,22 +784,23 @@ function renderEmojiSections(rawFilter) {
 }
 
 function getFilteredEmojiSections(rawFilter) {
+  const sectionsWithFavorites = getEmojiSectionsWithFavorites();
   const filter = typeof rawFilter === "string" ? rawFilter.trim() : "";
   const normalizedFilter = normalizeSearch(filter);
   const hasEmojiFilter = isLikelyEmoji(filter);
   const emojiFilter = hasEmojiFilter ? firstGrapheme(filter) : "";
 
   if (!filter) {
-    return EMOJI_SECTIONS.map((section) => ({ ...section, items: [...section.items] }));
+    return sectionsWithFavorites.map((section) => ({ ...section, items: [...section.items] }));
   }
 
   if (!hasEmojiFilter && normalizedFilter.length <= 1) {
-    return EMOJI_SECTIONS.map((section) => ({ ...section, items: [...section.items] }));
+    return sectionsWithFavorites.map((section) => ({ ...section, items: [...section.items] }));
   }
 
   const tokens = normalizedFilter.split(/\s+/).filter(Boolean);
 
-  return EMOJI_SECTIONS
+  return sectionsWithFavorites
     .map((section) => {
       if (hasEmojiFilter) {
         const items = section.items.filter((emoji) => emoji.includes(emojiFilter));
@@ -759,6 +837,46 @@ function getFilteredEmojiSections(rawFilter) {
       return { ...section, items };
     })
     .filter((section) => section.items.length > 0);
+}
+
+function getEmojiSectionsWithFavorites() {
+  const favoriteSet = new Set(getFavoriteEmojiItems());
+  return EMOJI_SECTIONS.map((section) => {
+    if (section.id !== "favoritos") {
+      return { ...section, items: [...section.items] };
+    }
+    const fallback = section.items.slice(0, 24);
+    const dynamic = Array.from(favoriteSet).slice(0, 24);
+    return {
+      ...section,
+      items: dynamic.length > 0 ? dynamic : fallback,
+    };
+  });
+}
+
+function getFavoriteEmojiItems() {
+  const ordered = [];
+  const seen = new Set();
+
+  const add = (rawEmoji) => {
+    if (typeof rawEmoji !== "string" || !rawEmoji.trim()) {
+      return;
+    }
+    const emoji = sanitizeEmoji(rawEmoji);
+    if (!emoji || seen.has(emoji)) {
+      return;
+    }
+    seen.add(emoji);
+    ordered.push(emoji);
+  };
+
+  state.items.forEach((item, index) => {
+    add(sanitizeEmoji(item?.emoji, index));
+  });
+  add(activeEmojiDraft);
+  add(RETRY_SLICE_EMOJI);
+
+  return ordered;
 }
 
 function emojiMatchScore(emoji, normalizedFilter, tokens) {
@@ -807,8 +925,21 @@ function bindRgbPair(rangeInput, numberInput) {
 function render() {
   renderDuration();
   renderTextSettings();
+  renderSoundToggle();
   drawWheel();
   setControlsDisabled(isSpinning);
+}
+
+function renderSoundToggle() {
+  if (!(refs.soundToggle instanceof HTMLElement)) {
+    return;
+  }
+  const muted = sanitizeSoundMuted(state.soundMuted);
+  refs.soundToggle.textContent = muted ? "🔇" : "🔊";
+  refs.soundToggle.classList.toggle("is-muted", muted);
+  refs.soundToggle.setAttribute("aria-pressed", String(muted));
+  refs.soundToggle.title = muted ? "Activar sonido" : "Silenciar sonido";
+  refs.soundToggle.setAttribute("aria-label", muted ? "Activar sonido" : "Silenciar sonido");
 }
 
 function renderDuration() {
@@ -1190,14 +1321,17 @@ function openEmojiModal(index) {
   refs.emojiModal.hidden = false;
   refs.emojiSearchInput.value = "";
   refs.emojiNativeInput.value = activeEmojiDraft;
+  syncEmojiModalPreview(activeEmojiDraft);
   renderEmojiSections("");
   refs.emojiSearchInput.focus();
 }
 
 function closeEmojiModal() {
+  stopEmojiModalPreviewHose(true);
   refs.emojiModal.hidden = true;
   activeEmojiIndex = null;
   activeEmojiDraft = null;
+  syncEmojiModalPreview("😀");
 }
 
 function setEmojiFromModal(rawEmoji, confirmSelection = false) {
@@ -1208,6 +1342,7 @@ function setEmojiFromModal(rawEmoji, confirmSelection = false) {
   const nextEmoji = sanitizeEmoji(rawEmoji, activeEmojiIndex);
   activeEmojiDraft = nextEmoji;
   refs.emojiNativeInput.value = nextEmoji;
+  syncEmojiModalPreview(nextEmoji);
   renderEmojiSections(refs.emojiSearchInput.value);
 
   if (confirmSelection) {
@@ -1234,6 +1369,166 @@ function confirmEmojiModalSelection() {
   saveState();
   drawWheel();
   closeEmojiModal();
+}
+
+function syncEmojiModalPreview(emoji) {
+  if (!(refs.emojiSelectedPreview instanceof HTMLElement)) {
+    return;
+  }
+  const next = sanitizeEmoji(emoji, activeEmojiIndex ?? 0);
+  refs.emojiSelectedPreview.textContent = next;
+  refs.emojiSelectedPreview.setAttribute("aria-label", `Emoji seleccionado: ${next}`);
+}
+
+function stopEmojiModalPreviewHose(clearNodes = false) {
+  if (emojiModalHoseRafId !== null) {
+    cancelAnimationFrame(emojiModalHoseRafId);
+    emojiModalHoseRafId = null;
+  }
+  emojiModalHoseController = null;
+  if (clearNodes && refs.emojiModalBurst instanceof HTMLElement) {
+    refs.emojiModalBurst.replaceChildren();
+  }
+}
+
+function requestStopEmojiModalPreviewHose() {
+  if (!emojiModalHoseController) {
+    return;
+  }
+  emojiModalHoseController.stopRequested = true;
+}
+
+function spawnEmojiModalPreviewHose(rawEmoji, options = {}) {
+  if (!(refs.emojiModalBurst instanceof HTMLElement) || !(refs.emojiSelectedPreview instanceof HTMLElement)) {
+    return;
+  }
+  const emoji = sanitizeEmoji(rawEmoji, activeEmojiIndex ?? 0);
+  stopEmojiModalPreviewHose(true);
+
+  const burstArea = refs.emojiModalBurst;
+  const areaRect = burstArea.getBoundingClientRect();
+  if (areaRect.width <= 0 || areaRect.height <= 0) {
+    return;
+  }
+  const sourceRect = refs.emojiSelectedPreview.getBoundingClientRect();
+  const originX = clamp(sourceRect.left + sourceRect.width * 0.5 - areaRect.left, 0, areaRect.width);
+  const originY = clamp(sourceRect.top + sourceRect.height * 0.56 - areaRect.top, 0, areaRect.height);
+
+  const sustainWhilePressed = Boolean(options?.sustainWhilePressed);
+  const controller = { stopRequested: false };
+  emojiModalHoseController = controller;
+
+  const particles = [];
+  const gravity = 1540;
+  const emissionDurationMs = sustainWhilePressed ? Number.POSITIVE_INFINITY : 760;
+  const lifeMinMs = sustainWhilePressed ? 1550 : 620;
+  const lifeMaxMs = sustainWhilePressed ? 3100 : 1320;
+  const spawnRatePerSec = sustainWhilePressed ? 112 : 132;
+  const spawnCapPerFrame = 10;
+  const maxParticles = sustainWhilePressed ? 150 : 128;
+  let elapsedMs = 0;
+  let spawnCarry = 0;
+  let sweepPhase = 0;
+  let lastTimestamp = performance.now();
+
+  const step = (timestamp) => {
+    if (emojiModalHoseController !== controller) {
+      emojiModalHoseRafId = null;
+      return;
+    }
+
+    const deltaMs = clamp(timestamp - lastTimestamp, 8, 44);
+    lastTimestamp = timestamp;
+    const deltaSec = deltaMs / 1000;
+    elapsedMs += deltaMs;
+    sweepPhase += deltaSec * 8.6;
+
+    if (!controller.stopRequested && elapsedMs <= emissionDurationMs) {
+      const spawnFloat = spawnRatePerSec * deltaSec + spawnCarry;
+      const plannedCount = Math.floor(spawnFloat);
+      spawnCarry = spawnFloat - plannedCount;
+      const spawnCount = Math.min(plannedCount, spawnCapPerFrame);
+      const fragment = document.createDocumentFragment();
+
+      for (let i = 0; i < spawnCount && particles.length < maxParticles; i += 1) {
+        const node = document.createElement("span");
+        node.className = "emoji-modal-hose-drop";
+        node.textContent = emoji;
+        const size = randomInt(18, 42);
+        node.style.fontSize = `${size}px`;
+        const sprayAngle = -Math.PI / 2 + Math.sin(sweepPhase + i * 0.26) * 0.72 + randomFloat(-0.35, 0.35);
+        const speed = randomFloat(420, 980);
+        const particle = {
+          node,
+          x: originX + randomFloat(-10, 10),
+          y: originY + randomFloat(-10, 10),
+          vx: Math.cos(sprayAngle) * speed + randomFloat(-90, 90),
+          vy: Math.sin(sprayAngle) * speed + randomFloat(-120, 60),
+          rot: randomFloat(-24, 24),
+          vr: randomFloat(-780, 780),
+          ageMs: 0,
+          lifeMs: randomInt(lifeMinMs, lifeMaxMs),
+          alive: true,
+          size,
+        };
+        node.style.transform = `translate3d(${particle.x}px, ${particle.y}px, 0) rotate(${particle.rot}deg)`;
+        fragment.append(node);
+        particles.push(particle);
+      }
+      burstArea.append(fragment);
+    } else {
+      controller.stopRequested = true;
+      spawnCarry = 0;
+    }
+
+    let aliveCount = 0;
+    for (let i = 0; i < particles.length; i += 1) {
+      const particle = particles[i];
+      if (!particle.alive) {
+        continue;
+      }
+      particle.ageMs += deltaMs;
+      if (particle.ageMs >= particle.lifeMs) {
+        particle.alive = false;
+        particle.node.remove();
+        continue;
+      }
+
+      particle.vy += gravity * deltaSec;
+      particle.vx *= 0.995;
+      particle.vr *= 0.994;
+      particle.x += particle.vx * deltaSec;
+      particle.y += particle.vy * deltaSec;
+      particle.rot += particle.vr * deltaSec;
+
+      const timeLeft = particle.lifeMs - particle.ageMs;
+      const fadeWindow = sustainWhilePressed ? 920 : 420;
+      const fade = timeLeft < fadeWindow ? clamp(timeLeft / fadeWindow, 0, 1) : 1;
+      particle.node.style.opacity = fade.toFixed(3);
+      particle.node.style.transform = `translate3d(${particle.x.toFixed(2)}px, ${particle.y.toFixed(2)}px, 0) rotate(${particle.rot.toFixed(2)}deg)`;
+
+      const offScreen =
+        particle.y > areaRect.height + particle.size * 1.1 ||
+        particle.x < -particle.size * 1.2 ||
+        particle.x > areaRect.width + particle.size * 1.2;
+      if (offScreen) {
+        particle.alive = false;
+        particle.node.remove();
+        continue;
+      }
+      aliveCount += 1;
+    }
+
+    const shouldStop = controller.stopRequested && aliveCount === 0;
+    if (shouldStop) {
+      stopEmojiModalPreviewHose(true);
+      return;
+    }
+
+    emojiModalHoseRafId = requestAnimationFrame(step);
+  };
+
+  emojiModalHoseRafId = requestAnimationFrame(step);
 }
 
 function drawWheel() {
@@ -1799,6 +2094,7 @@ function finalizeSpin(stoppedByClick) {
   const winnerItem = winnerEntry?.item;
   const winnerLabel = formatParticipantLabel(winnerItem);
   refs.resultText.textContent = `Ganó ${winnerLabel}.`;
+  playSpinEndFanfare();
   playWinApplause();
   const celebrationDurationMs = triggerWinnerCelebration(winnerItem);
   startWinnerLights(Math.max(1200, celebrationDurationMs));
@@ -1902,43 +2198,200 @@ function triggerPointerTick() {
   refs.pointer.classList.add("tick");
 }
 
-function resumeAudioContext() {
+function bindAudioUnlockEvents() {
+  const unlock = () => {
+    if (sanitizeSoundMuted(state.soundMuted)) {
+      return;
+    }
+    resumeAudioContext(true);
+  };
+  window.addEventListener("pointerdown", unlock, { passive: true, once: true });
+  window.addEventListener("touchstart", unlock, { passive: true, once: true });
+  window.addEventListener("keydown", unlock, { once: true });
+}
+
+function resumeAudioContext(forcePrime = false) {
+  if (sanitizeSoundMuted(state.soundMuted)) {
+    return;
+  }
   const ContextCtor = window.AudioContext || window.webkitAudioContext;
   if (!ContextCtor) {
     return;
   }
   if (!audioContext) {
-    audioContext = new ContextCtor();
+    audioContext = new ContextCtor({ latencyHint: "interactive" });
+  }
+  if (audioContext.state === "running") {
+    primeAudioContext(forcePrime);
+    return;
   }
   if (audioContext.state === "suspended") {
-    audioContext.resume().catch(() => {});
+    audioContext
+      .resume()
+      .then(() => {
+        primeAudioContext(forcePrime);
+      })
+      .catch(() => {});
   }
 }
 
+function primeAudioContext(force = false) {
+  if (!audioContext || audioContext.state !== "running") {
+    return;
+  }
+  if (audioWarmupDone && !force) {
+    return;
+  }
+  const now = audioContext.currentTime + 0.005;
+  const oscillator = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+  oscillator.type = "sine";
+  oscillator.frequency.setValueAtTime(440, now);
+  gain.gain.setValueAtTime(0.00001, now);
+  gain.gain.exponentialRampToValueAtTime(0.00035, now + 0.004);
+  gain.gain.exponentialRampToValueAtTime(0.00001, now + 0.02);
+  oscillator.connect(gain);
+  gain.connect(audioContext.destination);
+  oscillator.start(now);
+  oscillator.stop(now + 0.025);
+  audioWarmupDone = true;
+}
+
 function playPointerPulse() {
+  if (sanitizeSoundMuted(state.soundMuted)) {
+    return;
+  }
   if (!audioContext) {
+    resumeAudioContext();
     return;
   }
   if (audioContext.state !== "running") {
+    resumeAudioContext();
     return;
   }
 
   const now = audioContext.currentTime;
   const oscillator = audioContext.createOscillator();
   const gain = audioContext.createGain();
-  oscillator.type = "triangle";
-  oscillator.frequency.setValueAtTime(1300, now);
-  oscillator.frequency.exponentialRampToValueAtTime(760, now + 0.03);
+  oscillator.type = "square";
+  oscillator.frequency.setValueAtTime(960, now);
+  oscillator.frequency.exponentialRampToValueAtTime(440, now + 0.052);
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.06, now + 0.004);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.038);
+  gain.gain.exponentialRampToValueAtTime(0.11, now + 0.005);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.062);
   oscillator.connect(gain);
   gain.connect(audioContext.destination);
   oscillator.start(now);
-  oscillator.stop(now + 0.045);
+  oscillator.stop(now + 0.068);
+}
+
+function playSpinEndFanfare() {
+  if (sanitizeSoundMuted(state.soundMuted)) {
+    return;
+  }
+  if (!audioContext) {
+    resumeAudioContext();
+    return;
+  }
+  if (audioContext.state !== "running") {
+    resumeAudioContext();
+    return;
+  }
+  const start = audioContext.currentTime + 0.01;
+  const phrase = [
+    { freq: 523.25, duration: 0.14, gain: 0.1 },
+    { freq: 659.25, duration: 0.16, gain: 0.115 },
+    { freq: 783.99, duration: 0.2, gain: 0.13 },
+    { freq: 1046.5, duration: 0.68, gain: 0.19, final: true },
+  ];
+
+  let cursor = start;
+  phrase.forEach((note) => {
+    playFanfareTone(cursor, note.freq, note.duration, note.gain, note.final === true);
+    cursor += note.duration * 0.72;
+  });
+
+  const shimmerStart = cursor - 0.16;
+  const shimmerDuration = 0.34;
+  const shimmerBuffer = createNoiseBuffer(shimmerDuration);
+  const shimmerSource = audioContext.createBufferSource();
+  shimmerSource.buffer = shimmerBuffer;
+  const shimmerBand = audioContext.createBiquadFilter();
+  shimmerBand.type = "bandpass";
+  shimmerBand.frequency.setValueAtTime(2800, shimmerStart);
+  shimmerBand.Q.setValueAtTime(1.1, shimmerStart);
+  const shimmerGain = audioContext.createGain();
+  shimmerGain.gain.setValueAtTime(0.0001, shimmerStart);
+  shimmerGain.gain.exponentialRampToValueAtTime(0.03, shimmerStart + 0.04);
+  shimmerGain.gain.exponentialRampToValueAtTime(0.0001, shimmerStart + shimmerDuration);
+  shimmerSource.connect(shimmerBand);
+  shimmerBand.connect(shimmerGain);
+  shimmerGain.connect(audioContext.destination);
+  shimmerSource.start(shimmerStart);
+  shimmerSource.stop(shimmerStart + shimmerDuration + 0.02);
+}
+
+function playFanfareTone(when, freq, duration, gainValue, isFinal) {
+  if (!audioContext || audioContext.state !== "running") {
+    return;
+  }
+  const peak = Math.max(0.02, Number(gainValue) || 0.08);
+  const releaseAt = when + Math.max(0.1, Number(duration) || 0.2);
+  const oscA = audioContext.createOscillator();
+  const oscB = audioContext.createOscillator();
+  const sub = audioContext.createOscillator();
+  oscA.type = "triangle";
+  oscB.type = "square";
+  sub.type = "sine";
+
+  const gainA = audioContext.createGain();
+  const gainB = audioContext.createGain();
+  const gainSub = audioContext.createGain();
+  const lowpass = audioContext.createBiquadFilter();
+  lowpass.type = "lowpass";
+  lowpass.frequency.setValueAtTime(isFinal ? 4200 : 3400, when);
+  lowpass.Q.setValueAtTime(0.45, when);
+
+  oscA.frequency.setValueAtTime(freq, when);
+  oscA.frequency.exponentialRampToValueAtTime(freq * (isFinal ? 1.02 : 0.995), releaseAt);
+  oscB.frequency.setValueAtTime(freq * 2.01, when);
+  oscB.frequency.exponentialRampToValueAtTime(freq * (isFinal ? 1.44 : 1.24), releaseAt);
+  sub.frequency.setValueAtTime(Math.max(60, freq * 0.5), when);
+  sub.frequency.exponentialRampToValueAtTime(Math.max(50, freq * 0.45), releaseAt);
+
+  gainA.gain.setValueAtTime(0.0001, when);
+  gainA.gain.exponentialRampToValueAtTime(peak, when + 0.012);
+  gainA.gain.exponentialRampToValueAtTime(Math.max(0.0001, peak * 0.48), when + duration * 0.4);
+  gainA.gain.exponentialRampToValueAtTime(0.0001, releaseAt);
+
+  gainB.gain.setValueAtTime(0.0001, when);
+  gainB.gain.exponentialRampToValueAtTime(Math.max(0.01, peak * 0.36), when + 0.01);
+  gainB.gain.exponentialRampToValueAtTime(0.0001, releaseAt);
+
+  gainSub.gain.setValueAtTime(0.0001, when);
+  gainSub.gain.exponentialRampToValueAtTime(Math.max(0.008, peak * 0.32), when + 0.018);
+  gainSub.gain.exponentialRampToValueAtTime(0.0001, releaseAt);
+
+  oscA.connect(gainA);
+  oscB.connect(gainB);
+  sub.connect(gainSub);
+  gainA.connect(lowpass);
+  gainB.connect(lowpass);
+  gainSub.connect(lowpass);
+  lowpass.connect(audioContext.destination);
+
+  oscA.start(when);
+  oscB.start(when);
+  sub.start(when);
+  oscA.stop(releaseAt + 0.04);
+  oscB.stop(releaseAt + 0.04);
+  sub.stop(releaseAt + 0.04);
 }
 
 function playWinApplause() {
+  if (sanitizeSoundMuted(state.soundMuted)) {
+    return;
+  }
   if (!audioContext || audioContext.state !== "running") {
     return;
   }
@@ -1953,6 +2406,9 @@ function playWinApplause() {
 }
 
 function playFailureTone() {
+  if (sanitizeSoundMuted(state.soundMuted)) {
+    return;
+  }
   if (!audioContext || audioContext.state !== "running") {
     return;
   }
@@ -1969,6 +2425,225 @@ function playFailureTone() {
   gain.connect(audioContext.destination);
   oscillator.start(now);
   oscillator.stop(now + 0.35);
+}
+
+function playArgentinaAnthemSnippet() {
+  if (sanitizeSoundMuted(state.soundMuted)) {
+    return;
+  }
+  stopArgentinaAnthemSnippet(false);
+  const anthemAudio = getArgentinaAnthemAudio();
+  if (!anthemAudio) {
+    playArgentinaAnthemSynthSnippet();
+    return;
+  }
+
+  const startPlayback = () => {
+    try {
+      anthemAudio.currentTime = ARGENTINA_ANTHEM_SNIPPET_START_SEC;
+    } catch (_error) {
+      // Ignorar seeks tempranos antes de metadata.
+    }
+    anthemAudio.volume = ARGENTINA_ANTHEM_VOLUME;
+    const playPromise = anthemAudio.play();
+    if (playPromise && typeof playPromise.then === "function") {
+      playPromise
+        .then(() => {
+          scheduleArgentinaAnthemStop(anthemAudio);
+        })
+        .catch(() => {
+          stopArgentinaAnthemSnippet(true);
+          playArgentinaAnthemSynthSnippet();
+        });
+      return;
+    }
+    scheduleArgentinaAnthemStop(anthemAudio);
+  };
+
+  if (anthemAudio.readyState >= 1) {
+    startPlayback();
+    return;
+  }
+
+  const onMetadata = () => {
+    startPlayback();
+  };
+  anthemAudio.addEventListener("loadedmetadata", onMetadata, { once: true });
+  anthemAudio.load();
+}
+
+function getArgentinaAnthemAudio() {
+  if (typeof Audio !== "function") {
+    return null;
+  }
+  if (!argentinaAnthemAudio || typeof argentinaAnthemAudio.play !== "function") {
+    const audio = new Audio(ARGENTINA_ANTHEM_AUDIO_URL);
+    audio.preload = "auto";
+    audio.crossOrigin = "anonymous";
+    audio.loop = false;
+    argentinaAnthemAudio = audio;
+  }
+  return argentinaAnthemAudio;
+}
+
+function scheduleArgentinaAnthemStop(anthemAudio) {
+  if (argentinaAnthemStopTimeoutId !== null) {
+    clearTimeout(argentinaAnthemStopTimeoutId);
+    argentinaAnthemStopTimeoutId = null;
+  }
+  argentinaAnthemStopTimeoutId = window.setTimeout(() => {
+    argentinaAnthemStopTimeoutId = null;
+    fadeOutAndStopArgentinaAnthem(anthemAudio);
+  }, Math.max(0, ARGENTINA_ANTHEM_SNIPPET_DURATION_SEC * 1000));
+}
+
+function fadeOutAndStopArgentinaAnthem(anthemAudio) {
+  if (!anthemAudio || anthemAudio.paused) {
+    stopArgentinaAnthemSnippet(true);
+    return;
+  }
+  if (argentinaAnthemFadeRafId !== null) {
+    cancelAnimationFrame(argentinaAnthemFadeRafId);
+    argentinaAnthemFadeRafId = null;
+  }
+  const fromVolume = Math.max(0.01, Number(anthemAudio.volume) || ARGENTINA_ANTHEM_VOLUME);
+  const startAt = performance.now();
+  const step = (timestamp) => {
+    const elapsed = Math.max(0, timestamp - startAt);
+    const ratio = clamp(elapsed / ARGENTINA_ANTHEM_SNIPPET_FADE_MS, 0, 1);
+    if (anthemAudio.paused) {
+      argentinaAnthemFadeRafId = null;
+      stopArgentinaAnthemSnippet(true);
+      return;
+    }
+    anthemAudio.volume = fromVolume * (1 - ratio);
+    if (ratio >= 1) {
+      argentinaAnthemFadeRafId = null;
+      stopArgentinaAnthemSnippet(true);
+      return;
+    }
+    argentinaAnthemFadeRafId = requestAnimationFrame(step);
+  };
+  argentinaAnthemFadeRafId = requestAnimationFrame(step);
+}
+
+function stopArgentinaAnthemSnippet(resetPosition = true) {
+  if (argentinaAnthemStopTimeoutId !== null) {
+    clearTimeout(argentinaAnthemStopTimeoutId);
+    argentinaAnthemStopTimeoutId = null;
+  }
+  if (argentinaAnthemFadeRafId !== null) {
+    cancelAnimationFrame(argentinaAnthemFadeRafId);
+    argentinaAnthemFadeRafId = null;
+  }
+  if (!argentinaAnthemAudio || typeof argentinaAnthemAudio.pause !== "function") {
+    return;
+  }
+  argentinaAnthemAudio.pause();
+  argentinaAnthemAudio.volume = ARGENTINA_ANTHEM_VOLUME;
+  if (resetPosition) {
+    try {
+      argentinaAnthemAudio.currentTime = ARGENTINA_ANTHEM_SNIPPET_START_SEC;
+    } catch (_error) {
+      // Ignorar si no se puede seekear todavia.
+    }
+  }
+}
+
+function playArgentinaAnthemSynthSnippet(attempt = 0) {
+  if (sanitizeSoundMuted(state.soundMuted)) {
+    return;
+  }
+  if (!audioContext || audioContext.state !== "running") {
+    resumeAudioContext(true);
+    if (attempt < 3) {
+      window.setTimeout(() => {
+        playArgentinaAnthemSynthSnippet(attempt + 1);
+      }, 40);
+    }
+    return;
+  }
+
+  const start = audioContext.currentTime + 0.03;
+  const phrase = [
+    { freq: 392, duration: 0.24, gain: 0.07 },
+    { freq: 440, duration: 0.24, gain: 0.075 },
+    { freq: 493.88, duration: 0.29, gain: 0.082 },
+    { freq: 523.25, duration: 0.35, gain: 0.09 },
+    { freq: 493.88, duration: 0.24, gain: 0.082 },
+    { freq: 440, duration: 0.22, gain: 0.076 },
+    { freq: 392, duration: 0.29, gain: 0.074 },
+    { freq: 440, duration: 0.24, gain: 0.078 },
+    { freq: 493.88, duration: 0.29, gain: 0.086 },
+    { freq: 523.25, duration: 0.34, gain: 0.092 },
+    { freq: 587.33, duration: 0.6, gain: 0.1, final: true },
+  ];
+
+  let cursor = start;
+  phrase.forEach((note) => {
+    playAnthemTone(cursor, note.freq, note.duration, note.gain, note.final === true);
+    cursor += note.duration * 0.9;
+  });
+}
+
+function playAnthemTone(when, freq, duration, gainValue, isFinal) {
+  if (!audioContext || audioContext.state !== "running") {
+    return;
+  }
+  const sustain = Math.max(0.12, Number(duration) || 0.2);
+  const releaseAt = when + sustain;
+  const peak = Math.max(0.02, Number(gainValue) || 0.08);
+
+  const lead = audioContext.createOscillator();
+  const harmony = audioContext.createOscillator();
+  const low = audioContext.createOscillator();
+  lead.type = "triangle";
+  harmony.type = "sawtooth";
+  low.type = "sine";
+  lead.frequency.setValueAtTime(freq, when);
+  harmony.frequency.setValueAtTime(freq * 2.01, when);
+  low.frequency.setValueAtTime(Math.max(70, freq * 0.5), when);
+
+  const leadGain = audioContext.createGain();
+  const harmonyGain = audioContext.createGain();
+  const lowGain = audioContext.createGain();
+  const master = audioContext.createGain();
+  const lowpass = audioContext.createBiquadFilter();
+  lowpass.type = "lowpass";
+  lowpass.frequency.setValueAtTime(isFinal ? 3600 : 3000, when);
+  lowpass.Q.setValueAtTime(0.6, when);
+
+  leadGain.gain.setValueAtTime(0.0001, when);
+  leadGain.gain.exponentialRampToValueAtTime(peak, when + 0.02);
+  leadGain.gain.exponentialRampToValueAtTime(Math.max(0.0001, peak * 0.45), when + sustain * 0.55);
+  leadGain.gain.exponentialRampToValueAtTime(0.0001, releaseAt);
+
+  harmonyGain.gain.setValueAtTime(0.0001, when);
+  harmonyGain.gain.exponentialRampToValueAtTime(Math.max(0.01, peak * 0.25), when + 0.015);
+  harmonyGain.gain.exponentialRampToValueAtTime(0.0001, releaseAt);
+
+  lowGain.gain.setValueAtTime(0.0001, when);
+  lowGain.gain.exponentialRampToValueAtTime(Math.max(0.008, peak * 0.2), when + 0.02);
+  lowGain.gain.exponentialRampToValueAtTime(0.0001, releaseAt);
+
+  master.gain.setValueAtTime(0.96, when);
+  master.gain.exponentialRampToValueAtTime(isFinal ? 1.05 : 0.88, releaseAt);
+
+  lead.connect(leadGain);
+  harmony.connect(harmonyGain);
+  low.connect(lowGain);
+  leadGain.connect(lowpass);
+  harmonyGain.connect(lowpass);
+  lowGain.connect(lowpass);
+  lowpass.connect(master);
+  master.connect(audioContext.destination);
+
+  lead.start(when);
+  harmony.start(when);
+  low.start(when);
+  lead.stop(releaseAt + 0.05);
+  harmony.stop(releaseAt + 0.05);
+  low.stop(releaseAt + 0.05);
 }
 
 function scheduleClap(when, gainValue) {
@@ -2286,6 +2961,25 @@ function setWinnerAnimationMode(rawValue) {
   renderTextSettings();
 }
 
+function setSoundMuted(rawValue) {
+  const next = sanitizeSoundMuted(rawValue);
+  if (next === sanitizeSoundMuted(state.soundMuted)) {
+    renderSoundToggle();
+    return;
+  }
+  state.soundMuted = next;
+  if (next) {
+    stopArgentinaAnthemSnippet(true);
+    if (audioContext && audioContext.state === "running") {
+      audioContext.suspend().catch(() => {});
+    }
+  } else {
+    resumeAudioContext(true);
+  }
+  saveState();
+  renderSoundToggle();
+}
+
 function setParticipantAnimationMode(index, rawValue) {
   if (!state.items[index]) {
     return;
@@ -2535,6 +3229,7 @@ function defaultState() {
     fontSizePx: DEFAULT_FONT_SIZE_PX,
     fontFamilyId: DEFAULT_FONT_FAMILY_ID,
     winnerAnimationMode: DEFAULT_WINNER_ANIMATION_MODE,
+    soundMuted: DEFAULT_SOUND_MUTED,
     retrySliceEnabled: DEFAULT_RETRY_SLICE_ENABLED,
     retrySlicePct: DEFAULT_RETRY_SLICE_PCT,
     retrySliceColor: DEFAULT_RETRY_SLICE_COLOR,
@@ -2584,6 +3279,7 @@ function sanitizeState(input) {
     fontSizePx: sanitizeFontSize(input?.fontSizePx),
     fontFamilyId: sanitizeFontFamily(input?.fontFamilyId),
     winnerAnimationMode: sanitizeWinnerAnimationMode(input?.winnerAnimationMode),
+    soundMuted: sanitizeSoundMuted(input?.soundMuted),
     retrySliceEnabled: retryEnabled,
     retrySlicePct: retryPct,
     retrySliceColor: sanitizeRetrySliceColor(input?.retrySliceColor),
@@ -2602,6 +3298,7 @@ function saveState() {
     fontSizePx: sanitizeFontSize(state.fontSizePx),
     fontFamilyId: sanitizeFontFamily(state.fontFamilyId),
     winnerAnimationMode: sanitizeWinnerAnimationMode(state.winnerAnimationMode),
+    soundMuted: sanitizeSoundMuted(state.soundMuted),
     retrySliceEnabled: sanitizeRetrySliceEnabled(state.retrySliceEnabled),
     retrySlicePct: sanitizeRetrySlicePct(state.retrySlicePct),
     retrySliceColor: sanitizeRetrySliceColor(state.retrySliceColor),
@@ -2777,6 +3474,10 @@ function sanitizeParticipantAnimationMode(value) {
 }
 
 function sanitizeParticipantHidden(value) {
+  return value === true;
+}
+
+function sanitizeSoundMuted(value) {
   return value === true;
 }
 
@@ -3147,8 +3848,8 @@ function buildEmojiSections() {
   const sections = [
     {
       id: "favoritos",
-      label: "Favoritos",
-      keywords: ["favoritos", "default", "top"],
+      label: "Favoritos en uso",
+      keywords: ["favoritos", "usados", "participantes", "top"],
       ranges: [],
       preset: DEFAULT_EMOJIS,
     },
@@ -3303,20 +4004,34 @@ function buildEmojiSections() {
 }
 
 function buildFlagEmojiList() {
-  const fallback = ["🇦🇷", "🇺🇸", "🇪🇸", "🇧🇷", "🇲🇽", "🇮🇹", "🇫🇷", "🇩🇪", "🇬🇧", "🇯🇵"];
-  const codes = getRegionCodes();
-  if (codes.length === 0) {
-    return fallback;
-  }
-
-  const flags = [];
+  const fallback = AMERICA_REGION_CODES;
+  const codes = [...AMERICA_REGION_CODES, ...getRegionCodes()];
+  const uniqueCodes = [];
+  const codeSet = new Set();
   codes.forEach((code) => {
+    if (typeof code !== "string") {
+      return;
+    }
+    const normalizedCode = code.trim().toUpperCase();
+    if (!/^[A-Z]{2}$/.test(normalizedCode) || codeSet.has(normalizedCode)) {
+      return;
+    }
+    codeSet.add(normalizedCode);
+    uniqueCodes.push(normalizedCode);
+  });
+  const flags = [];
+  uniqueCodes.forEach((code) => {
     const flag = regionCodeToFlag(code);
     if (flag && isLikelyEmoji(flag)) {
       flags.push(flag);
     }
   });
-  return flags.length > 0 ? flags : fallback;
+  if (flags.length > 0) {
+    return flags;
+  }
+  return fallback
+    .map((code) => regionCodeToFlag(code))
+    .filter((flag) => Boolean(flag) && isLikelyEmoji(flag));
 }
 
 function getRegionCodes() {
