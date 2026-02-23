@@ -3,6 +3,7 @@ const STATS_VERSION = 2;
 const COOKIE_KEY = "tocaTocaConfig";
 const STORAGE_KEY = "tocaTocaConfigFallback";
 const STATS_STORAGE_KEY = "tocaTocaSpinStats";
+const CHANGELOG_FILE_PATH = "changelog.md";
 const DEFAULT_SPIN_DURATION_MIN = 5;
 const DEFAULT_SPIN_DURATION_MAX = 8;
 const MIN_SPIN_DURATION = 1;
@@ -77,6 +78,7 @@ const WINNER_ANIMATION_OPTIONS = [
   { id: "emojiHose", emoji: "🚿", label: "Manguera de emojis" },
   { id: "fuegosArtificiales", emoji: "🎆", label: "Fuegos artificiales" },
   { id: "cartaBlanca", emoji: "🃏", label: "Carta blanca" },
+  { id: "cartaBlancaFreecell", emoji: "🤴", label: "Carta blanca (Classic)" },
   { id: "emojiBounce", emoji: "🪀", label: "Rebote emoji" },
   { id: "confeti", emoji: "🎉", label: "Confeti" },
   { id: "estrellas", emoji: "✨", label: "Estrellas" },
@@ -222,6 +224,7 @@ const refs = {
   winAnimationSelect: document.getElementById("winAnimationSelect"),
   itemList: document.getElementById("itemList"),
   addItemButton: document.getElementById("addItemButton"),
+  equalizePercentagesButton: document.getElementById("equalizePercentagesButton"),
   resetButton: document.getElementById("resetButton"),
   formMessage: document.getElementById("formMessage"),
   colorModal: document.getElementById("colorModal"),
@@ -249,6 +252,8 @@ const refs = {
   emojiNativeInput: document.getElementById("emojiNativeInput"),
   emojiSections: document.getElementById("emojiSections"),
   infoModal: document.getElementById("infoModal"),
+  infoVersionText: document.getElementById("infoVersionText"),
+  changelogList: document.getElementById("changelogList"),
   infoModalClose: document.getElementById("infoModalClose"),
   argentinaFlagButton: document.getElementById("argentinaFlagButton"),
   resetConfirmModal: document.getElementById("resetConfirmModal"),
@@ -299,6 +304,7 @@ let winnerFireworkTimeoutIds = [];
 let trackedCursorX = Number.NaN;
 let trackedCursorY = Number.NaN;
 let audioWarmupDone = false;
+let changelogLoadPromise = null;
 
 init();
 
@@ -320,6 +326,7 @@ function bindEvents() {
   refs.canvas.addEventListener("click", spinWheel);
   refs.canvas.addEventListener("pointerdown", updateTrackedCursorFromEvent);
   refs.addItemButton.addEventListener("click", addParticipant);
+  refs.equalizePercentagesButton.addEventListener("click", equalizeParticipantPercentages);
   refs.resetButton.addEventListener("click", openResetConfirmModal);
   refs.configPanelToggle.addEventListener("click", toggleConfigPanel);
   refs.soundToggle.addEventListener("click", () => setSoundMuted(!state.soundMuted));
@@ -637,6 +644,7 @@ function initWinnerAnimationSelector() {
 function openInfoModal() {
   refs.infoModal.hidden = false;
   refs.infoPanelToggle.setAttribute("aria-expanded", "true");
+  void ensureInfoChangelogLoaded();
 }
 
 function closeInfoModal(restoreFocus = true) {
@@ -645,6 +653,148 @@ function closeInfoModal(restoreFocus = true) {
   if (restoreFocus) {
     refs.infoPanelToggle.focus();
   }
+}
+
+async function ensureInfoChangelogLoaded() {
+  if (!(refs.changelogList instanceof HTMLElement)) {
+    return;
+  }
+  if (refs.changelogList.dataset.loaded === "true") {
+    return;
+  }
+  if (changelogLoadPromise) {
+    await changelogLoadPromise;
+    return;
+  }
+  refs.changelogList.dataset.loaded = "loading";
+  refs.changelogList.replaceChildren(buildChangelogStatusItem("Cargando changelog..."));
+  changelogLoadPromise = loadInfoChangelogFromFile()
+    .catch(() => {
+      renderChangelogLoadError();
+    })
+    .finally(() => {
+      changelogLoadPromise = null;
+    });
+  await changelogLoadPromise;
+}
+
+async function loadInfoChangelogFromFile() {
+  if (typeof fetch !== "function") {
+    throw new Error("fetch no disponible");
+  }
+  const response = await fetch(CHANGELOG_FILE_PATH, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`No se pudo cargar ${CHANGELOG_FILE_PATH}: ${response.status}`);
+  }
+  const markdown = await response.text();
+  const parsed = parseChangelogMarkdown(markdown);
+  renderInfoChangelog(parsed);
+}
+
+function parseChangelogMarkdown(markdown) {
+  const parsed = {
+    currentVersion: "",
+    entries: [],
+  };
+  const lines = String(markdown || "").split(/\r?\n/);
+  let currentEntry = null;
+  let currentSection = "";
+
+  lines.forEach((line) => {
+    const trimmed = String(line || "").trim();
+    if (!trimmed) {
+      return;
+    }
+
+    const currentVersionMatch = trimmed.match(/^##\s+Version actual:\s*(.+)$/i);
+    if (currentVersionMatch) {
+      parsed.currentVersion = currentVersionMatch[1].trim();
+      return;
+    }
+
+    const versionMatch = trimmed.match(/^##\s+(v.+)$/i);
+    if (versionMatch) {
+      currentEntry = {
+        title: versionMatch[1].trim(),
+        notes: [],
+      };
+      parsed.entries.push(currentEntry);
+      currentSection = "";
+      return;
+    }
+
+    const sectionMatch = trimmed.match(/^###\s+(.+)$/);
+    if (sectionMatch) {
+      currentSection = sectionMatch[1].trim();
+      return;
+    }
+
+    const bulletMatch = trimmed.match(/^-\s+(.+)$/);
+    if (bulletMatch && currentEntry) {
+      const note = bulletMatch[1].trim();
+      currentEntry.notes.push(currentSection ? `${currentSection}: ${note}` : note);
+    }
+  });
+
+  return parsed;
+}
+
+function renderInfoChangelog(parsedChangelog) {
+  if (!(refs.changelogList instanceof HTMLElement)) {
+    return;
+  }
+
+  refs.changelogList.replaceChildren();
+  const safeEntries = Array.isArray(parsedChangelog?.entries) ? parsedChangelog.entries : [];
+  if (safeEntries.length === 0) {
+    refs.changelogList.dataset.loaded = "false";
+    refs.changelogList.replaceChildren(buildChangelogStatusItem("No hay entradas de changelog."));
+  } else {
+    safeEntries.forEach((entry) => {
+      const item = document.createElement("li");
+      const title = document.createElement("strong");
+      title.textContent = String(entry?.title || "Version sin titulo");
+      item.append(title);
+
+      const notes = Array.isArray(entry?.notes) ? entry.notes : [];
+      if (notes.length > 0) {
+        const details = document.createElement("ul");
+        details.className = "changelog-entry-notes";
+        notes.forEach((note) => {
+          const noteItem = document.createElement("li");
+          noteItem.textContent = String(note || "");
+          details.append(noteItem);
+        });
+        item.append(details);
+      }
+      refs.changelogList.append(item);
+    });
+    refs.changelogList.dataset.loaded = "true";
+  }
+
+  if (refs.infoVersionText instanceof HTMLElement) {
+    const label = String(parsedChangelog?.currentVersion || "").trim();
+    if (label) {
+      refs.infoVersionText.textContent = label;
+    }
+  }
+}
+
+function renderChangelogLoadError() {
+  if (!(refs.changelogList instanceof HTMLElement)) {
+    return;
+  }
+  refs.changelogList.dataset.loaded = "false";
+  refs.changelogList.replaceChildren(
+    buildChangelogStatusItem("No se pudo cargar changelog.md en este entorno."),
+  );
+}
+
+function buildChangelogStatusItem(text) {
+  const item = document.createElement("li");
+  item.className = "changelog-status-item";
+  item.textContent = text;
+  return item;
 }
 
 function openStatsModal() {
@@ -1019,11 +1169,13 @@ function renderSoundToggle() {
     return;
   }
   const muted = sanitizeSoundMuted(state.soundMuted);
+  const soundLabel = muted ? "Activar sonido" : "Silenciar sonido";
   refs.soundToggle.textContent = muted ? "🔇" : "🔊";
   refs.soundToggle.classList.toggle("is-muted", muted);
   refs.soundToggle.setAttribute("aria-pressed", String(muted));
-  refs.soundToggle.title = muted ? "Activar sonido" : "Silenciar sonido";
-  refs.soundToggle.setAttribute("aria-label", muted ? "Activar sonido" : "Silenciar sonido");
+  refs.soundToggle.title = soundLabel;
+  refs.soundToggle.setAttribute("aria-label", soundLabel);
+  refs.soundToggle.setAttribute("data-tooltip", soundLabel);
 }
 
 function renderDuration() {
@@ -1055,6 +1207,8 @@ function renderTextSettings() {
 
 function renderItemList() {
   const maxParticipantsReached = state.items.length >= MAX_PARTICIPANTS;
+  const visibleCount = getVisibleParticipantCount(state.items);
+  const canEqualize = visibleCount >= MIN_PARTICIPANTS;
   refs.addItemButton.disabled = isSpinning || maxParticipantsReached;
   refs.addItemButton.title = maxParticipantsReached
     ? `Maximo ${MAX_PARTICIPANTS} participantes por configuracion.`
@@ -1065,9 +1219,18 @@ function renderItemList() {
       ? `Maximo ${MAX_PARTICIPANTS} participantes alcanzado`
       : "Agregar participante",
   );
+  refs.equalizePercentagesButton.disabled = isSpinning || !canEqualize;
+  refs.equalizePercentagesButton.title = canEqualize
+    ? "Igualar porcentajes de participantes visibles"
+    : "Se necesitan al menos 2 participantes visibles";
+  refs.equalizePercentagesButton.setAttribute(
+    "aria-label",
+    canEqualize
+      ? "Igualar porcentajes de participantes visibles"
+      : "Se necesitan al menos 2 participantes visibles para igualar porcentajes",
+  );
 
   refs.itemList.replaceChildren();
-  const visibleCount = getVisibleParticipantCount(state.items);
 
   state.items.forEach((item, index) => {
     const row = document.createElement("div");
@@ -2900,6 +3063,27 @@ function addParticipant() {
   setMessage("Participante agregado y porcentajes equilibrados.", "success");
 }
 
+function equalizeParticipantPercentages() {
+  if (isSpinning) {
+    return;
+  }
+  const visibleItems = getVisibleItems(state.items);
+  if (visibleItems.length < MIN_PARTICIPANTS) {
+    setMessage("La rula necesita al menos 2 participantes visibles.", "error");
+    return;
+  }
+  equalizePercentages(
+    visibleItems,
+    getParticipantTargetUnits(
+      visibleItems.length,
+      getParticipantSharePctForConfig(state.retrySliceEnabled, state.retrySlicePct),
+    ),
+  );
+  saveState();
+  render();
+  setMessage("Porcentajes de participantes igualados.", "success");
+}
+
 function removeParticipant(index) {
   if (state.items.length <= MIN_PARTICIPANTS) {
     setMessage("No se puede bajar de 2 participantes.", "error");
@@ -3785,6 +3969,7 @@ function safeParse(rawValue) {
 
 function setControlsDisabled(disabled) {
   refs.addItemButton.disabled = disabled;
+  refs.equalizePercentagesButton.disabled = disabled;
   refs.resetButton.disabled = disabled;
   refs.resetConfirmCancel.disabled = disabled;
   refs.statsPanelToggle.disabled = disabled;
@@ -4891,9 +5076,35 @@ function buildWinnerCardFace(index) {
   const rank = CARD_RANKS[index % CARD_RANKS.length];
   const suit = CARD_SUITS[randomInt(0, CARD_SUITS.length - 1)];
   return {
-    label: `${rank}${suit.symbol}`,
+    rank,
+    symbol: suit.symbol,
     red: suit.red,
   };
+}
+
+function buildWinnerCardCorner(rank, symbol) {
+  const corner = document.createElement("span");
+  corner.className = "winner-card-corner";
+  const rankNode = document.createElement("span");
+  rankNode.className = "winner-card-corner-rank";
+  rankNode.textContent = rank;
+  const suitNode = document.createElement("span");
+  suitNode.className = "winner-card-corner-suit";
+  suitNode.textContent = symbol;
+  corner.append(rankNode, suitNode);
+  return corner;
+}
+
+function decorateWinnerCardNode(cardNode, face) {
+  cardNode.replaceChildren();
+  const topCorner = buildWinnerCardCorner(face.rank, face.symbol);
+  topCorner.classList.add("is-top");
+  const bottomCorner = buildWinnerCardCorner(face.rank, face.symbol);
+  bottomCorner.classList.add("is-bottom");
+  const center = document.createElement("span");
+  center.className = "winner-card-center";
+  center.textContent = face.symbol;
+  cardNode.append(topCorner, center, bottomCorner);
 }
 
 function spawnCartaBlancaDrops() {
@@ -4918,7 +5129,7 @@ function spawnCartaBlancaDrops() {
     if (face.red) {
       card.classList.add("is-red");
     }
-    card.textContent = face.label;
+    decorateWinnerCardNode(card, face);
     card.style.width = `${randomInt(44, 56)}px`;
     card.style.height = `${randomInt(62, 76)}px`;
     card.style.fontSize = `${randomInt(16, 22)}px`;
@@ -5014,6 +5225,199 @@ function spawnCartaBlancaDrops() {
 
   winnerCardCascadeRafId = requestAnimationFrame(step);
   return maxDropMs;
+}
+
+function spawnCartaBlancaFreecellDrops() {
+  if (winnerCardCascadeRafId !== null) {
+    cancelAnimationFrame(winnerCardCascadeRafId);
+    winnerCardCascadeRafId = null;
+  }
+
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 1280;
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 720;
+  const cardCount = 12;
+  const gravity = 2320;
+  const floorDrag = 0.994;
+  const wallBounce = 0.9;
+  const topBounce = 0.86;
+  const cards = [];
+  let maxDropMs = 0;
+
+  for (let i = 0; i < cardCount; i += 1) {
+    const face = buildWinnerCardFace(i);
+    const card = document.createElement("span");
+    card.className = "winner-card-freecell";
+    if (face.red) {
+      card.classList.add("is-red");
+    }
+    decorateWinnerCardNode(card, face);
+    card.style.width = `${randomInt(58, 72)}px`;
+    card.style.height = `${randomInt(82, 104)}px`;
+    card.style.fontSize = `${randomInt(20, 28)}px`;
+
+    const width = Number.parseFloat(card.style.width) || 50;
+    const height = Number.parseFloat(card.style.height) || 70;
+    const lifeMs = randomInt(9800, 13400);
+    const spawnAtMs = randomInt(0, 880);
+    const trailCadenceMs = randomInt(22, 30);
+
+    cards.push({
+      node: card,
+      face,
+      isRed: face.red,
+      width,
+      height,
+      x: randomFloat(viewportWidth * 0.08, viewportWidth * 0.92),
+      y: randomFloat(viewportHeight * 0.74, viewportHeight * 0.92),
+      vx: randomFloat(-520, 520),
+      vy: randomFloat(-1880, -1240),
+      rot: randomFloat(-5, 5),
+      rotKick: randomFloat(-1.8, 1.8),
+      bounce: randomFloat(0.82, 0.9),
+      airDrag: randomFloat(0.997, 0.9995),
+      lifeMs,
+      spawnAtMs,
+      ageMs: 0,
+      elapsedSinceTrailMs: randomFloat(0, trailCadenceMs),
+      trailCadenceMs,
+      active: false,
+      alive: true,
+    });
+
+    maxDropMs = Math.max(maxDropMs, lifeMs + spawnAtMs);
+  }
+
+  let elapsedMs = 0;
+  let lastTimestamp = performance.now();
+  const step = (timestamp) => {
+    const deltaSec = clamp((timestamp - lastTimestamp) / 1000, 0.008, 0.036);
+    lastTimestamp = timestamp;
+    elapsedMs += deltaSec * 1000;
+    let aliveCount = 0;
+    let pendingCount = 0;
+
+    for (let i = 0; i < cards.length; i += 1) {
+      const card = cards[i];
+      if (!card.alive) {
+        continue;
+      }
+      if (!card.active) {
+        if (elapsedMs >= card.spawnAtMs) {
+          card.active = true;
+          card.node.style.transform = `translate3d(${card.x.toFixed(2)}px, ${card.y.toFixed(2)}px, 0) rotate(${card.rot.toFixed(2)}deg)`;
+          refs.emojiRain.append(card.node);
+        } else {
+          pendingCount += 1;
+          continue;
+        }
+      }
+
+      card.ageMs += deltaSec * 1000;
+      card.elapsedSinceTrailMs += deltaSec * 1000;
+      if (card.ageMs >= card.lifeMs) {
+        card.alive = false;
+        card.node.remove();
+        continue;
+      }
+
+      card.vy += gravity * deltaSec;
+      card.vx *= card.airDrag;
+      card.x += card.vx * deltaSec;
+      card.y += card.vy * deltaSec;
+
+      const minX = -card.width * 0.26;
+      const maxX = viewportWidth - card.width * 0.74;
+      const roofY = -card.height * 0.65;
+      const floorY = viewportHeight - card.height;
+
+      if (card.x <= minX) {
+        card.x = minX;
+        card.vx = Math.abs(card.vx) * wallBounce;
+        card.rotKick = Math.abs(card.rotKick) + randomFloat(1.2, 3.2);
+      } else if (card.x >= maxX) {
+        card.x = maxX;
+        card.vx = -Math.abs(card.vx) * wallBounce;
+        card.rotKick = -Math.abs(card.rotKick) - randomFloat(1.2, 3.2);
+      }
+
+      if (card.y <= roofY) {
+        card.y = roofY;
+        card.vy = Math.abs(card.vy) * topBounce;
+        card.vx += randomFloat(-50, 50);
+        card.rotKick += randomFloat(-2.4, 2.4);
+      }
+
+      if (card.y >= floorY) {
+        card.y = floorY;
+        card.vy = -Math.abs(card.vy) * card.bounce;
+        card.vx *= floorDrag;
+        card.rotKick += randomFloat(-2.4, 2.4);
+        if (Math.abs(card.vy) < 420) {
+          card.vy = -randomFloat(980, 1460);
+        }
+      }
+
+      const targetRot = clamp((card.vx / 520) * 13, -13, 13);
+      card.rot += (targetRot - card.rot) * 0.22 + card.rotKick * deltaSec * 4.8;
+      card.rotKick *= 0.9;
+
+      if (
+        card.elapsedSinceTrailMs >= card.trailCadenceMs &&
+        (Math.abs(card.vx) > 120 || Math.abs(card.vy) > 180)
+      ) {
+        card.elapsedSinceTrailMs = 0;
+        const speed = Math.hypot(card.vx, card.vy);
+        const trailStrength = clamp(speed / 1850, 0.26, 0.58);
+        const driftX = clamp(-card.vx * 0.018, -12, 12) + randomFloat(-1.5, 1.5);
+        const driftY = clamp(-card.vy * 0.012, -10, 10) + randomFloat(-1, 1);
+        spawnFreecellCardTrail(card, trailStrength, driftX, driftY);
+        if (trailStrength > 0.5 && Math.random() < 0.42) {
+          spawnFreecellCardTrail(card, trailStrength * 0.72, driftX * 0.62, driftY * 0.62);
+        }
+      }
+
+      const timeLeftMs = card.lifeMs - card.ageMs;
+      const opacity = timeLeftMs < 1200 ? clamp(timeLeftMs / 1200, 0, 1) : 1;
+      card.node.style.opacity = opacity.toFixed(3);
+      card.node.style.transform = `translate3d(${card.x.toFixed(2)}px, ${card.y.toFixed(2)}px, 0) rotate(${card.rot.toFixed(2)}deg)`;
+      aliveCount += 1;
+    }
+
+    if (aliveCount === 0 && pendingCount === 0) {
+      winnerCardCascadeRafId = null;
+      return;
+    }
+    winnerCardCascadeRafId = requestAnimationFrame(step);
+  };
+
+  winnerCardCascadeRafId = requestAnimationFrame(step);
+  return maxDropMs;
+}
+
+function spawnFreecellCardTrail(card, trailStrengthRaw = 0.36, driftXRaw = 0, driftYRaw = 0) {
+  const trailStrength = clamp(trailStrengthRaw, 0.16, 0.62);
+  const driftX = Number.isFinite(driftXRaw) ? driftXRaw : 0;
+  const driftY = Number.isFinite(driftYRaw) ? driftYRaw : 0;
+  const trail = document.createElement("span");
+  trail.className = "winner-card-freecell-trail";
+  if (card.isRed) {
+    trail.classList.add("is-red");
+  }
+  decorateWinnerCardNode(trail, card.face);
+  trail.style.width = `${card.width}px`;
+  trail.style.height = `${card.height}px`;
+  trail.style.fontSize = card.node.style.fontSize;
+  trail.style.setProperty("--trail-opacity", trailStrength.toFixed(3));
+  trail.style.setProperty("--trail-duration", `${Math.round(520 + trailStrength * 420)}ms`);
+  trail.style.transform = `translate3d(${(card.x + driftX).toFixed(2)}px, ${(card.y + driftY).toFixed(2)}px, 0) rotate(${card.rot.toFixed(2)}deg)`;
+  trail.addEventListener(
+    "animationend",
+    () => {
+      trail.remove();
+    },
+    { once: true },
+  );
+  refs.emojiRain.append(trail);
 }
 
 function spawnEmojiBounceDrops(emoji) {
@@ -5392,6 +5796,9 @@ function triggerWinnerCelebration(winnerItem) {
   if (winnerMode === "cartaBlanca") {
     refs.resultText.classList.add("winner-carta");
     maxDropMs = spawnCartaBlancaDrops();
+  } else if (winnerMode === "cartaBlancaFreecell") {
+    refs.resultText.classList.add("winner-carta");
+    maxDropMs = spawnCartaBlancaFreecellDrops();
   } else if (winnerMode === "emojiBounce") {
     refs.resultText.classList.add("winner-emoji-bounce");
     maxDropMs = spawnEmojiBounceDrops(emoji);

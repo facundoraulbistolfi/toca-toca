@@ -18,17 +18,19 @@
       id="configPanelToggle"
       class="config-panel-toggle"
       type="button"
+      data-tooltip="Configuracion"
       aria-controls="configPanel"
       aria-expanded="false"
       aria-label="Abrir configuracion"
       title="Abrir configuracion"
     >
-      ⚙
+      ⚙️
     </button>
     <button
       id="soundToggle"
       class="sound-toggle"
       type="button"
+      data-tooltip="Silenciar sonido"
       aria-pressed="false"
       aria-label="Silenciar sonido"
       title="Silenciar sonido"
@@ -39,6 +41,7 @@
       id="statsPanelToggle"
       class="stats-panel-toggle"
       type="button"
+      data-tooltip="Estadisticas"
       aria-controls="statsModal"
       aria-expanded="false"
       aria-label="Abrir estadisticas"
@@ -50,12 +53,13 @@
       id="infoPanelToggle"
       class="info-panel-toggle"
       type="button"
+      data-tooltip="Informacion"
       aria-controls="infoModal"
       aria-expanded="false"
       aria-label="Abrir informacion"
       title="Abrir informacion"
     >
-      i
+      ℹ️
     </button>
     <div id="configBackdrop" class="config-backdrop" hidden></div>
     <div id="bgEmojiRain" class="bg-emoji-rain" aria-hidden="true"></div>
@@ -199,6 +203,7 @@
               <option value="emojiHose">🚿 Manguera de emojis</option>
               <option value="fuegosArtificiales">🎆 Fuegos artificiales</option>
               <option value="cartaBlanca">🃏 Carta blanca</option>
+              <option value="cartaBlancaFreecell">🤴 Carta blanca (Classic)</option>
               <option value="emojiBounce">🪀 Rebote emoji</option>
               <option value="confeti">🎉 Confeti</option>
               <option value="estrellas">✨ Estrellas</option>
@@ -213,8 +218,9 @@
           <div id="itemList" class="item-list"></div>
 
           <div class="actions">
-            <button id="addItemButton" type="button">Agregar participante</button>
-            <button id="resetButton" class="secondary" type="button">Restablecer</button>
+            <button id="addItemButton" type="button">➕ Agregar participante</button>
+            <button id="equalizePercentagesButton" type="button">⚖️ Igualar porcentajes</button>
+            <button id="resetButton" class="secondary" type="button">♻️ Restablecer</button>
           </div>
         </details>
       </div>
@@ -381,7 +387,7 @@
         <section class="info-block">
           <h4>Toca Toca</h4>
           <p>Rula de nombres personalizable.</p>
-          <p><strong>Version actual:</strong> v1.0.0</p>
+          <p><strong>Version actual:</strong> <span id="infoVersionText">v1.1.0</span></p>
           <p>
             Creado por
             <a href="https://github.com/facundoraulbistolfi" target="_blank" rel="noopener noreferrer">Facundo Bistolfi</a>
@@ -403,10 +409,45 @@
           </p>
         </section>
 
-        <section class="info-block">
-          <h4>Changelog</h4>
-          <ul class="changelog-list">
-            <li><strong>v1.0.0</strong> - Primera version productiva.</li>
+        <section class="info-block contact-info-block">
+          <h4>💬 Contacto</h4>
+          <p>Si queres reportar algo o proponer mejoras, usa uno de estos canales.</p>
+          <p class="contact-privacy-note">
+            ⚠️ Los issues son publicos. No compartas datos personales o sensibles.
+          </p>
+          <div class="contact-actions">
+            <a
+              class="contact-action-button"
+              href="https://github.com/facundoraulbistolfi/toca-toca/issues/new?template=bug-report.yml"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              🐞 Reportar bug
+            </a>
+            <a
+              class="contact-action-button"
+              href="https://github.com/facundoraulbistolfi/toca-toca/issues/new?template=idea.yml"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              💡 Proponer idea
+            </a>
+          </div>
+          <p class="contact-open-issues">
+            <a
+              href="https://github.com/facundoraulbistolfi/toca-toca/issues"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Ver issues abiertos
+            </a>
+          </p>
+        </section>
+
+        <section class="info-block changelog-block">
+          <h4>📝 Changelog</h4>
+          <ul id="changelogList" class="changelog-list">
+            <li class="changelog-status-item">Cargando changelog...</li>
           </ul>
         </section>
       </section>

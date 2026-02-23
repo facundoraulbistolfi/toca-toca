@@ -1,8 +1,47 @@
 # Changelog
 
-## Version actual: v1.0.0
+## Version actual: v1.1.0
 
 Fecha de corte: 23 de febrero de 2026
+
+## v1.1.0 - 2026-02-23
+
+### UI y experiencia
+
+- Botones flotantes superiores unificados visualmente con iconos emoji consistentes.
+- Tooltips visuales al pasar cursor por botones flotantes (configuracion, sonido, estadisticas, informacion).
+- Botones principales de participantes alineados en color/estilo (agregar, igualar porcentajes, restablecer).
+
+### Contacto e informacion
+
+- Seccion `Contacto` integrada en el modal de `Informacion`.
+- Flujo publico de contacto via GitHub Issues:
+  - `Reportar bug` (template)
+  - `Proponer idea` (template)
+  - `Ver issues abiertos`
+- Aviso de privacidad visible para evitar compartir datos sensibles en issues publicos.
+
+### Changelog y contenido
+
+- El modal de informacion ahora carga el changelog directamente desde `changelog.md`.
+- El bloque de changelog en el modal es scrolleable para evitar crecimiento infinito.
+- Changelog movido al final del modal de informacion.
+
+### Configuracion de participantes
+
+- Nuevo boton `⚖️ Igualar porcentajes` para distribuir en forma pareja los porcentajes de participantes visibles.
+- Se agregaron validaciones de habilitacion/estado segun cantidad minima visible y giro en curso.
+
+### Animaciones
+
+- Nueva variante de animacion de cartas `Carta blanca (Classic)` con fisica tipo FreeCell:
+  - menos cartas, mas grandes
+  - rebotes contra bordes/fondo
+  - rastro de movimiento
+- Ajustes de nomenclatura e iconos:
+  - `🃏 Carta blanca`
+  - `🤴 Carta blanca (Classic)`
+- Mejora de cara de carta con rango/palo en esquinas superior e inferior.
 
 ## v1.0.0 - 2026-02-23
 
