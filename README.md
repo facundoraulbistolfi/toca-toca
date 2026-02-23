@@ -41,8 +41,18 @@ App web estilo casino para decidir a quien le toca, con una rula totalmente conf
 - `index.html`: estructura principal y modales
 - `styles.css`: tema visual, layout responsive y estilos de componentes
 - `app.js`: logica de giro, configuracion, persistencia y animaciones
+- `emoji-catalog.js`: catalogo oficial local (Unicode/CLDR) con nombres ES/EN y aliases de busqueda
+- `scripts/generate-emoji-catalog.mjs`: generador del catalogo a partir de fuentes oficiales
 - `favicon.svg`: icono de pestaña
 - `changelog.md`: historial de cambios
+
+## Regenerar catalogo de emojis
+
+Para actualizar el catalogo local:
+
+```bash
+node scripts/generate-emoji-catalog.mjs
+```
 
 ## Ejecucion local
 
@@ -59,12 +69,11 @@ Luego abrir `http://localhost:8080`.
 
 ## Despliegue en GitHub Pages
 
-1. Publicar los archivos en la rama objetivo (por ejemplo `main`).
-2. Ir a `Settings > Pages` en GitHub.
-3. En `Build and deployment`:
-   - `Source: Deploy from a branch`
-   - `Branch: main`
-   - `Folder: / (root)`
-4. Guardar.
+1. Asegurar que exista el workflow `.github/workflows/deploy-pages.yml`.
+2. Hacer push de tus cambios a la rama `main`.
+3. Ir a `Settings > Pages` en GitHub.
+4. En `Build and deployment`, seleccionar:
+   - `Source: GitHub Actions`
+5. Guardar.
 
-GitHub Pages servira la app como sitio estatico.
+En cada push a `main`, GitHub Actions publicara automaticamente el sitio.
