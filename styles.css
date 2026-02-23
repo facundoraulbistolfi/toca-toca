@@ -783,6 +783,15 @@ button:disabled {
   animation: winner-neon 320ms steps(2, end) infinite alternate;
 }
 
+#resultText.winner-argentina {
+  color: #f4fcff;
+  text-shadow:
+    0 0 8px rgba(139, 220, 255, 0.8),
+    0 0 18px rgba(255, 255, 255, 0.62),
+    0 6px 10px rgba(22, 47, 80, 0.32);
+  animation: winner-argentina-text 1.2s cubic-bezier(0.17, 0.9, 0.24, 1);
+}
+
 #resultText.result-failure-retry {
   color: #ffe9e9;
   text-shadow:
@@ -2004,6 +2013,32 @@ input[type="text"] {
   will-change: transform, opacity;
 }
 
+.emoji-drop-argentina {
+  text-shadow:
+    0 0 7px rgba(154, 226, 255, 0.62),
+    0 3px 6px rgba(14, 29, 46, 0.34);
+  filter: drop-shadow(0 2px 6px rgba(27, 58, 96, 0.28));
+}
+
+.emoji-drop-argentina.is-flag {
+  filter:
+    drop-shadow(0 0 8px rgba(136, 218, 255, 0.66))
+    drop-shadow(0 4px 8px rgba(13, 31, 52, 0.34));
+}
+
+.emoji-drop-argentina.is-mate,
+.emoji-drop-argentina.is-ball {
+  filter:
+    drop-shadow(0 0 6px rgba(255, 255, 255, 0.54))
+    drop-shadow(0 4px 8px rgba(10, 19, 30, 0.34));
+}
+
+.emoji-drop-argentina.is-star {
+  text-shadow:
+    0 0 9px rgba(255, 241, 160, 0.72),
+    0 4px 9px rgba(23, 29, 42, 0.32);
+}
+
 .winner-card-cascade {
   position: absolute;
   top: 0;
@@ -2318,6 +2353,24 @@ input[type="text"] {
   100% {
     transform: scale(1);
     opacity: 1;
+  }
+}
+
+@keyframes winner-argentina-text {
+  0% {
+    transform: translateY(8px) scale(0.9);
+    opacity: 0;
+    filter: saturate(1.2) brightness(0.95);
+  }
+  46% {
+    transform: translateY(-3px) scale(1.1);
+    opacity: 1;
+    filter: saturate(1.55) brightness(1.16);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+    filter: saturate(1) brightness(1);
   }
 }
 

@@ -97,12 +97,9 @@ const MIN_RETRY_SLICE_PCT = 1;
 const MAX_RETRY_SLICE_PCT = 70;
 const DEFAULT_RETRY_SLICE_COLOR = "#6A1E2A";
 const DEFAULT_SOUND_MUTED = false;
-const ARGENTINA_ANTHEM_AUDIO_URL =
-  "https://upload.wikimedia.org/wikipedia/commons/7/77/Himno_Nacional_Argentino_%28instrumental%29.ogg";
-const ARGENTINA_ANTHEM_SNIPPET_START_SEC = 0;
-const ARGENTINA_ANTHEM_SNIPPET_DURATION_SEC = 12.5;
-const ARGENTINA_ANTHEM_SNIPPET_FADE_MS = 560;
-const ARGENTINA_ANTHEM_VOLUME = 0.84;
+const ARGENTINA_EASTER_EGG_EMOJI_POOL = ["🧉", "🇦🇷", "⚽", "⭐", "🌟", "🏆", "🩵", "🤍", "☀️"];
+const ARGENTINA_EASTER_EGG_FEATURED_EMOJIS = ["🇦🇷", "🧉", "⚽", "⭐", "🌟", "🏆"];
+const ARGENTINA_EASTER_EGG_FOCUS_EMOJIS = ["🧉", "🇦🇷", "🧉", "🇦🇷", "🧉", "🇦🇷", "⚽", "⭐"];
 const PARTICIPANT_ANIMATION_OPTIONS = [
   { id: "general", emoji: "🌐", label: "General (usar ajuste global)" },
   ...WINNER_ANIMATION_OPTIONS
@@ -129,6 +126,7 @@ const WINNER_RESULT_EFFECT_CLASSES = [
   "winner-estrellas",
   "winner-fireworks",
   "winner-neon",
+  "winner-argentina",
   "result-failure-retry",
 ];
 const MIN_PARTICIPANTS = 2;
@@ -151,46 +149,10 @@ const BG_RAIN_MIN_DELAY_MS = 180;
 const BG_RAIN_MAX_DELAY_MS = 340;
 const BG_RAIN_MAX_ACTIVE_DROPS = 64;
 const DEFAULT_EMOJIS = ["😀", "😎", "🤖", "🔥", "🍀", "🚀", "🎯", "⭐", "⚡", "🌈"];
-const AMERICA_REGION_CODES = [
-  "AG",
-  "AR",
-  "BS",
-  "BB",
-  "BZ",
-  "BO",
-  "BR",
-  "CA",
-  "CL",
-  "CO",
-  "CR",
-  "CU",
-  "DM",
-  "DO",
-  "EC",
-  "SV",
-  "GD",
-  "GT",
-  "GY",
-  "HT",
-  "HN",
-  "JM",
-  "MX",
-  "NI",
-  "PA",
-  "PY",
-  "PE",
-  "KN",
-  "LC",
-  "VC",
-  "SR",
-  "TT",
-  "US",
-  "UY",
-  "VE",
-];
-const EMOJI_SECTIONS = buildEmojiSections();
+const EMOJI_CATALOG = loadEmojiCatalog();
+const EMOJI_SECTIONS = buildEmojiSections(EMOJI_CATALOG);
 const EMOJI_OPTIONS = EMOJI_SECTIONS.flatMap((section) => section.items);
-const EMOJI_NAME_INDEX = buildEmojiNameIndex(EMOJI_SECTIONS);
+const EMOJI_NAME_INDEX = buildEmojiNameIndex(EMOJI_SECTIONS, EMOJI_CATALOG);
 const COLOR_PALETTES = buildColorPalettes();
 const DEFAULT_COLOR_PALETTE_ID = COLOR_PALETTES[0]?.id || "vibrante";
 const COLOR_PALETTE_MAP = new Map(COLOR_PALETTES.map((palette) => [palette.id, palette]));
@@ -319,9 +281,6 @@ let winnerFireworkTimeoutIds = [];
 let trackedCursorX = Number.NaN;
 let trackedCursorY = Number.NaN;
 let audioWarmupDone = false;
-let argentinaAnthemAudio = null;
-let argentinaAnthemStopTimeoutId = null;
-let argentinaAnthemFadeRafId = null;
 
 init();
 
@@ -471,7 +430,7 @@ function bindEvents() {
   });
   refs.infoModalClose.addEventListener("click", closeInfoModal);
   if (refs.argentinaFlagButton instanceof HTMLElement) {
-    refs.argentinaFlagButton.addEventListener("click", playArgentinaAnthemSnippet);
+    refs.argentinaFlagButton.addEventListener("click", triggerInfoEasterEgg);
   }
   refs.resetConfirmModal.addEventListener("click", (event) => {
     if (event.target instanceof HTMLElement && event.target.hasAttribute("data-close-reset-modal")) {
@@ -651,8 +610,23 @@ function openInfoModal() {
 function closeInfoModal() {
   refs.infoModal.hidden = true;
   refs.infoPanelToggle.setAttribute("aria-expanded", "false");
-  stopArgentinaAnthemSnippet(true);
   refs.infoPanelToggle.focus();
+}
+
+function triggerInfoEasterEgg() {
+  if (isSpinning) {
+    setMessage("El easter egg se activa cuando la rula esta quieta.", "error");
+    return;
+  }
+  clearWinnerCelebrationVisuals();
+  refs.resultText.classList.add("winner-argentina");
+  const maxDropMs = spawnArgentinaEasterEggDrops();
+  const celebrationDurationMs = Math.ceil(maxDropMs) + 260;
+  celebrationTimeoutId = window.setTimeout(() => {
+    clearWinnerCelebrationVisuals();
+  }, celebrationDurationMs);
+  startWinnerLights(celebrationDurationMs + 300);
+  setMessage("Easter egg argento activado.", "success");
 }
 
 function openResetConfirmModal() {
@@ -760,7 +734,7 @@ function renderEmojiSections(rawFilter) {
       if (meta?.title) {
         button.title = meta.title;
       }
-      button.setAttribute("aria-label", `Elegir emoji ${emoji}`);
+      button.setAttribute("aria-label", buildEmojiAriaLabel(emoji, meta));
       button.addEventListener("click", () => {
         setEmojiFromModal(emoji);
       });
@@ -794,7 +768,7 @@ function getFilteredEmojiSections(rawFilter) {
     return sectionsWithFavorites.map((section) => ({ ...section, items: [...section.items] }));
   }
 
-  if (!hasEmojiFilter && normalizedFilter.length <= 1) {
+  if (!hasEmojiFilter && !normalizedFilter) {
     return sectionsWithFavorites.map((section) => ({ ...section, items: [...section.items] }));
   }
 
@@ -820,17 +794,11 @@ function getFilteredEmojiSections(rawFilter) {
           return true;
         }
         const meta = EMOJI_NAME_INDEX.get(emoji);
-        if (!meta) {
-          return false;
-        }
-        return (
-          meta.searchable.includes(normalizedFilter) ||
-          tokens.every((token) => meta.searchable.includes(token))
-        );
+        return emojiMatchesText(meta, normalizedFilter, tokens);
       });
       items.sort((a, b) => {
-        const scoreB = emojiMatchScore(b, normalizedFilter, tokens);
-        const scoreA = emojiMatchScore(a, normalizedFilter, tokens);
+        const scoreB = emojiMatchScore(b, normalizedFilter, tokens, sectionCorpus);
+        const scoreA = emojiMatchScore(a, normalizedFilter, tokens, sectionCorpus);
         return scoreB - scoreA;
       });
 
@@ -879,23 +847,60 @@ function getFavoriteEmojiItems() {
   return ordered;
 }
 
-function emojiMatchScore(emoji, normalizedFilter, tokens) {
+function emojiMatchesText(meta, normalizedFilter, tokens) {
+  if (!meta || !normalizedFilter) {
+    return false;
+  }
+  const searchable = normalizeSearch(meta.searchable || "");
+  if (!searchable) {
+    return false;
+  }
+  if (searchable.includes(normalizedFilter)) {
+    return true;
+  }
+  return tokens.length > 0 && tokens.every((token) => searchable.includes(token));
+}
+
+function emojiMatchScore(emoji, normalizedFilter, tokens, sectionCorpus = "") {
   const meta = EMOJI_NAME_INDEX.get(emoji);
   if (!meta || !normalizedFilter) {
     return 0;
   }
+  const en = normalizeSearch(meta.en || "");
+  const es = normalizeSearch(meta.es || "");
+  const aliases = normalizeSearch([...(meta.aliasesEn || []), ...(meta.aliasesEs || [])].join(" "));
+  const category = normalizeSearch(
+    [
+      meta.groupLabelEn,
+      meta.groupLabelEs,
+      meta.subgroupLabelEn,
+      meta.subgroupLabelEs,
+      sectionCorpus,
+      ...(meta.keywords || []),
+    ].join(" "),
+  );
+  const searchable = normalizeSearch(meta.searchable || "");
   let score = 0;
-  if (meta.searchable.includes(normalizedFilter)) {
-    score += 4;
+  if (en === normalizedFilter || es === normalizedFilter) {
+    score += 120;
   }
-  if (meta.en && normalizeSearch(meta.en).startsWith(normalizedFilter)) {
-    score += 2;
+  if (en.startsWith(normalizedFilter) || es.startsWith(normalizedFilter)) {
+    score += 90;
   }
-  if (meta.es && normalizeSearch(meta.es).startsWith(normalizedFilter)) {
-    score += 2;
+  if (en.includes(normalizedFilter) || es.includes(normalizedFilter)) {
+    score += 70;
   }
-  if (tokens.length > 1 && tokens.every((token) => meta.searchable.includes(token))) {
-    score += 1;
+  if (aliases.includes(normalizedFilter)) {
+    score += 40;
+  }
+  if (category.includes(normalizedFilter)) {
+    score += 10;
+  }
+  if (tokens.length > 1 && tokens.every((token) => searchable.includes(token))) {
+    score += 15;
+  }
+  if (searchable.includes(normalizedFilter)) {
+    score += 5;
   }
   return score;
 }
@@ -1651,7 +1656,7 @@ function drawWoodenBorder(center, outerRadius, sectionRadius) {
 function drawWheelRim(center, radius) {
   ctx.save();
   ctx.translate(center, center);
-  const standbyPalette = getStandbyLightPalette();
+  const spinPalette = getSpinLightPalette();
 
   const outer = ctx.createLinearGradient(-radius, -radius, radius, radius);
   outer.addColorStop(0, "rgba(34, 47, 68, 0.9)");
@@ -1686,7 +1691,7 @@ function drawWheelRim(center, radius) {
 
   for (let i = 0; i < RIM_LIGHTS_COUNT; i += 1) {
     const angle = (i / RIM_LIGHTS_COUNT) * TAU;
-    const light = getRimLightStyle(i, standbyPalette);
+    const light = getRimLightStyle(i, spinPalette);
     const rBulb = radius + 5.4;
     const xBulb = Math.cos(angle) * rBulb;
     const yBulb = Math.sin(angle) * rBulb;
@@ -1730,10 +1735,12 @@ function drawWheelRim(center, radius) {
 
 function getRimHaloStyle() {
   if (rimLightMode === RIM_LIGHT_MODE.SPIN) {
+    const palette = getSpinLightPalette();
+    const lead = palette[0] || { r: 255, g: 255, b: 255 };
     return {
-      stroke: "rgba(255, 255, 255, 0.56)",
-      glow: "rgba(255, 255, 255, 0.95)",
-      blur: 20,
+      stroke: `rgba(${lead.r}, ${lead.g}, ${lead.b}, 0.6)`,
+      glow: `rgba(${lead.r}, ${lead.g}, ${lead.b}, 0.94)`,
+      blur: 22,
     };
   }
 
@@ -1747,23 +1754,41 @@ function getRimHaloStyle() {
     };
   }
 
+  const t = performance.now();
+  const hue = (t * 0.08) % 360;
   return {
-    stroke: "rgba(126, 229, 255, 0.5)",
-    glow: "rgba(126, 229, 255, 0.9)",
-    blur: 18,
+    stroke: `hsla(${hue}, 100%, 62%, 0.58)`,
+    glow: `hsla(${(hue + 18) % 360}, 100%, 66%, 0.9)`,
+    blur: 20,
   };
 }
 
-function getRimLightStyle(index, standbyPalette) {
+function getRimLightStyle(index, spinPalette) {
   if (rimLightMode === RIM_LIGHT_MODE.SPIN) {
-    const pulse = 0.85 + Math.sin(performance.now() * 0.03 + index * 0.15) * 0.12;
+    const t = performance.now();
+    const palette = Array.isArray(spinPalette) && spinPalette.length > 0
+      ? spinPalette
+      : [{ r: 255, g: 255, b: 255 }];
+    const len = palette.length;
+    const travel = t * 0.0018;
+    const position = ((index / RIM_LIGHTS_COUNT) * len + travel) % len;
+    const baseIndex = Math.floor(position);
+    const nextIndex = (baseIndex + 1) % len;
+    const mix = position - baseIndex;
+    const color = mixRgb(palette[baseIndex], palette[nextIndex], mix);
+    const pulse = 0.74 + Math.sin(t * 0.02 + index * 0.2) * 0.18;
+    const alpha = clamp(0.56 + pulse * 0.38, 0.45, 0.95);
     return {
-      glow: `rgba(255, 255, 255, ${pulse})`,
-      blur: 26,
-      bulbRadius: 4.9,
-      bulbFill: "rgba(255, 255, 255, 0.97)",
-      coreRadius: 2.35,
-      coreFill: "rgba(255, 255, 255, 0.98)",
+      glow: `rgba(${color.r}, ${color.g}, ${color.b}, ${clamp(alpha + 0.18, 0.55, 1)})`,
+      blur: 28,
+      bulbRadius: 4.85,
+      bulbFill: `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha})`,
+      coreRadius: 2.3,
+      coreFill: `rgba(${clamp(color.r + 70, 0, 255)}, ${clamp(color.g + 70, 0, 255)}, ${clamp(
+        color.b + 70,
+        0,
+        255,
+      )}, ${clamp(alpha + 0.16, 0.62, 1)})`,
     };
   }
 
@@ -1784,57 +1809,48 @@ function getRimLightStyle(index, standbyPalette) {
   }
 
   const t = performance.now();
-  const palette = Array.isArray(standbyPalette) && standbyPalette.length > 0
-    ? standbyPalette
-    : [
-        { r: 73, g: 228, b: 255 },
-        { r: 255, g: 94, b: 199 },
-        { r: 255, g: 214, b: 88 },
-        { r: 118, g: 255, b: 139 },
-      ];
-  const len = palette.length;
+  const len = 10;
   const travel = t * RIM_STANDBY_ROT_SPEED;
   const position = ((index / RIM_LIGHTS_COUNT) * len + travel) % len;
-  const baseIndex = Math.floor(position);
-  const nextIndex = (baseIndex + 1) % len;
-  const mix = position - baseIndex;
-  const color = mixRgb(palette[baseIndex], palette[nextIndex], mix);
-  const pulse = 0.65 + Math.sin(t * 0.004 + index * 0.2) * 0.25;
-  const alpha = clamp(0.45 + pulse * 0.5, 0.35, 0.95);
-  const bulbRadius = 4.2 + Math.sin(t * 0.006 + index * 0.22) * 0.35;
+  const hue = (position / len) * 360;
+  const pulse = 0.66 + Math.sin((t + index * 19) * 0.008) * 0.2;
+  const alpha = clamp(0.5 + pulse * 0.38, 0.42, 0.93);
+  const bulbRadius = 4.35 + Math.sin((t + index * 17) * 0.01) * 0.3;
 
   return {
-    glow: `rgba(${color.r}, ${color.g}, ${color.b}, ${clamp(alpha + 0.12, 0.4, 1)})`,
-    blur: 24,
+    glow: `hsla(${(hue + 16) % 360}, 100%, 66%, ${clamp(alpha + 0.2, 0.58, 1)})`,
+    blur: 27,
     bulbRadius,
-    bulbFill: `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha})`,
+    bulbFill: `hsla(${hue}, 100%, 63%, ${alpha})`,
     coreRadius: Math.max(1.7, bulbRadius * 0.48),
-    coreFill: `rgba(${clamp(color.r + 70, 0, 255)}, ${clamp(color.g + 70, 0, 255)}, ${clamp(
-      color.b + 70,
-      0,
-      255,
-    )}, ${clamp(alpha + 0.12, 0.5, 1)})`,
+    coreFill: `hsla(${(hue + 12) % 360}, 100%, 78%, ${clamp(alpha + 0.16, 0.62, 1)})`,
   };
 }
 
-function getStandbyLightPalette() {
-  const unique = new Set();
-  const palette = [];
-  const spinEntries = getSpinEntries();
-  const colorSource = spinEntries.length > 0
-    ? spinEntries.map((entry, index) => ({ color: getSpinEntryColor(entry), index }))
-    : state.items.map((item, index) => ({ color: sanitizeColor(item?.color, index), index }));
-  colorSource.forEach((row) => {
-    const baseHex = sanitizeColor(row.color, row.index).toUpperCase();
-    const compHex = complementHexColor(baseHex);
-    [baseHex, compHex].forEach((hex) => {
-      if (!unique.has(hex)) {
-        unique.add(hex);
-        palette.push(hexToRgb(hex));
-      }
-    });
-  });
-  return palette;
+function getSpinLightPalette() {
+  const activeEntry = getActiveSpinEntry();
+  const activeHex = activeEntry ? getSpinEntryColor(activeEntry) : "#FFFFFF";
+  const base = hexToRgb(activeHex);
+  const accent = hexToRgb(complementHexColor(activeHex));
+  return [
+    mixRgb(base, { r: 255, g: 255, b: 255 }, 0.36),
+    base,
+    mixRgb(base, accent, 0.4),
+    mixRgb(base, { r: 18, g: 24, b: 34 }, 0.2),
+  ];
+}
+
+function getActiveSpinEntry() {
+  if (!isSpinning) {
+    return null;
+  }
+  const entries = getSpinEntries();
+  if (entries.length === 0) {
+    return null;
+  }
+  const index = getWinnerIndexFromRotation(currentRotationDeg, entries);
+  const safeIndex = index < 0 ? 0 : index;
+  return entries[safeIndex] || entries[0] || null;
 }
 
 function complementHexColor(hexColor) {
@@ -2427,225 +2443,6 @@ function playFailureTone() {
   oscillator.stop(now + 0.35);
 }
 
-function playArgentinaAnthemSnippet() {
-  if (sanitizeSoundMuted(state.soundMuted)) {
-    return;
-  }
-  stopArgentinaAnthemSnippet(false);
-  const anthemAudio = getArgentinaAnthemAudio();
-  if (!anthemAudio) {
-    playArgentinaAnthemSynthSnippet();
-    return;
-  }
-
-  const startPlayback = () => {
-    try {
-      anthemAudio.currentTime = ARGENTINA_ANTHEM_SNIPPET_START_SEC;
-    } catch (_error) {
-      // Ignorar seeks tempranos antes de metadata.
-    }
-    anthemAudio.volume = ARGENTINA_ANTHEM_VOLUME;
-    const playPromise = anthemAudio.play();
-    if (playPromise && typeof playPromise.then === "function") {
-      playPromise
-        .then(() => {
-          scheduleArgentinaAnthemStop(anthemAudio);
-        })
-        .catch(() => {
-          stopArgentinaAnthemSnippet(true);
-          playArgentinaAnthemSynthSnippet();
-        });
-      return;
-    }
-    scheduleArgentinaAnthemStop(anthemAudio);
-  };
-
-  if (anthemAudio.readyState >= 1) {
-    startPlayback();
-    return;
-  }
-
-  const onMetadata = () => {
-    startPlayback();
-  };
-  anthemAudio.addEventListener("loadedmetadata", onMetadata, { once: true });
-  anthemAudio.load();
-}
-
-function getArgentinaAnthemAudio() {
-  if (typeof Audio !== "function") {
-    return null;
-  }
-  if (!argentinaAnthemAudio || typeof argentinaAnthemAudio.play !== "function") {
-    const audio = new Audio(ARGENTINA_ANTHEM_AUDIO_URL);
-    audio.preload = "auto";
-    audio.crossOrigin = "anonymous";
-    audio.loop = false;
-    argentinaAnthemAudio = audio;
-  }
-  return argentinaAnthemAudio;
-}
-
-function scheduleArgentinaAnthemStop(anthemAudio) {
-  if (argentinaAnthemStopTimeoutId !== null) {
-    clearTimeout(argentinaAnthemStopTimeoutId);
-    argentinaAnthemStopTimeoutId = null;
-  }
-  argentinaAnthemStopTimeoutId = window.setTimeout(() => {
-    argentinaAnthemStopTimeoutId = null;
-    fadeOutAndStopArgentinaAnthem(anthemAudio);
-  }, Math.max(0, ARGENTINA_ANTHEM_SNIPPET_DURATION_SEC * 1000));
-}
-
-function fadeOutAndStopArgentinaAnthem(anthemAudio) {
-  if (!anthemAudio || anthemAudio.paused) {
-    stopArgentinaAnthemSnippet(true);
-    return;
-  }
-  if (argentinaAnthemFadeRafId !== null) {
-    cancelAnimationFrame(argentinaAnthemFadeRafId);
-    argentinaAnthemFadeRafId = null;
-  }
-  const fromVolume = Math.max(0.01, Number(anthemAudio.volume) || ARGENTINA_ANTHEM_VOLUME);
-  const startAt = performance.now();
-  const step = (timestamp) => {
-    const elapsed = Math.max(0, timestamp - startAt);
-    const ratio = clamp(elapsed / ARGENTINA_ANTHEM_SNIPPET_FADE_MS, 0, 1);
-    if (anthemAudio.paused) {
-      argentinaAnthemFadeRafId = null;
-      stopArgentinaAnthemSnippet(true);
-      return;
-    }
-    anthemAudio.volume = fromVolume * (1 - ratio);
-    if (ratio >= 1) {
-      argentinaAnthemFadeRafId = null;
-      stopArgentinaAnthemSnippet(true);
-      return;
-    }
-    argentinaAnthemFadeRafId = requestAnimationFrame(step);
-  };
-  argentinaAnthemFadeRafId = requestAnimationFrame(step);
-}
-
-function stopArgentinaAnthemSnippet(resetPosition = true) {
-  if (argentinaAnthemStopTimeoutId !== null) {
-    clearTimeout(argentinaAnthemStopTimeoutId);
-    argentinaAnthemStopTimeoutId = null;
-  }
-  if (argentinaAnthemFadeRafId !== null) {
-    cancelAnimationFrame(argentinaAnthemFadeRafId);
-    argentinaAnthemFadeRafId = null;
-  }
-  if (!argentinaAnthemAudio || typeof argentinaAnthemAudio.pause !== "function") {
-    return;
-  }
-  argentinaAnthemAudio.pause();
-  argentinaAnthemAudio.volume = ARGENTINA_ANTHEM_VOLUME;
-  if (resetPosition) {
-    try {
-      argentinaAnthemAudio.currentTime = ARGENTINA_ANTHEM_SNIPPET_START_SEC;
-    } catch (_error) {
-      // Ignorar si no se puede seekear todavia.
-    }
-  }
-}
-
-function playArgentinaAnthemSynthSnippet(attempt = 0) {
-  if (sanitizeSoundMuted(state.soundMuted)) {
-    return;
-  }
-  if (!audioContext || audioContext.state !== "running") {
-    resumeAudioContext(true);
-    if (attempt < 3) {
-      window.setTimeout(() => {
-        playArgentinaAnthemSynthSnippet(attempt + 1);
-      }, 40);
-    }
-    return;
-  }
-
-  const start = audioContext.currentTime + 0.03;
-  const phrase = [
-    { freq: 392, duration: 0.24, gain: 0.07 },
-    { freq: 440, duration: 0.24, gain: 0.075 },
-    { freq: 493.88, duration: 0.29, gain: 0.082 },
-    { freq: 523.25, duration: 0.35, gain: 0.09 },
-    { freq: 493.88, duration: 0.24, gain: 0.082 },
-    { freq: 440, duration: 0.22, gain: 0.076 },
-    { freq: 392, duration: 0.29, gain: 0.074 },
-    { freq: 440, duration: 0.24, gain: 0.078 },
-    { freq: 493.88, duration: 0.29, gain: 0.086 },
-    { freq: 523.25, duration: 0.34, gain: 0.092 },
-    { freq: 587.33, duration: 0.6, gain: 0.1, final: true },
-  ];
-
-  let cursor = start;
-  phrase.forEach((note) => {
-    playAnthemTone(cursor, note.freq, note.duration, note.gain, note.final === true);
-    cursor += note.duration * 0.9;
-  });
-}
-
-function playAnthemTone(when, freq, duration, gainValue, isFinal) {
-  if (!audioContext || audioContext.state !== "running") {
-    return;
-  }
-  const sustain = Math.max(0.12, Number(duration) || 0.2);
-  const releaseAt = when + sustain;
-  const peak = Math.max(0.02, Number(gainValue) || 0.08);
-
-  const lead = audioContext.createOscillator();
-  const harmony = audioContext.createOscillator();
-  const low = audioContext.createOscillator();
-  lead.type = "triangle";
-  harmony.type = "sawtooth";
-  low.type = "sine";
-  lead.frequency.setValueAtTime(freq, when);
-  harmony.frequency.setValueAtTime(freq * 2.01, when);
-  low.frequency.setValueAtTime(Math.max(70, freq * 0.5), when);
-
-  const leadGain = audioContext.createGain();
-  const harmonyGain = audioContext.createGain();
-  const lowGain = audioContext.createGain();
-  const master = audioContext.createGain();
-  const lowpass = audioContext.createBiquadFilter();
-  lowpass.type = "lowpass";
-  lowpass.frequency.setValueAtTime(isFinal ? 3600 : 3000, when);
-  lowpass.Q.setValueAtTime(0.6, when);
-
-  leadGain.gain.setValueAtTime(0.0001, when);
-  leadGain.gain.exponentialRampToValueAtTime(peak, when + 0.02);
-  leadGain.gain.exponentialRampToValueAtTime(Math.max(0.0001, peak * 0.45), when + sustain * 0.55);
-  leadGain.gain.exponentialRampToValueAtTime(0.0001, releaseAt);
-
-  harmonyGain.gain.setValueAtTime(0.0001, when);
-  harmonyGain.gain.exponentialRampToValueAtTime(Math.max(0.01, peak * 0.25), when + 0.015);
-  harmonyGain.gain.exponentialRampToValueAtTime(0.0001, releaseAt);
-
-  lowGain.gain.setValueAtTime(0.0001, when);
-  lowGain.gain.exponentialRampToValueAtTime(Math.max(0.008, peak * 0.2), when + 0.02);
-  lowGain.gain.exponentialRampToValueAtTime(0.0001, releaseAt);
-
-  master.gain.setValueAtTime(0.96, when);
-  master.gain.exponentialRampToValueAtTime(isFinal ? 1.05 : 0.88, releaseAt);
-
-  lead.connect(leadGain);
-  harmony.connect(harmonyGain);
-  low.connect(lowGain);
-  leadGain.connect(lowpass);
-  harmonyGain.connect(lowpass);
-  lowGain.connect(lowpass);
-  lowpass.connect(master);
-  master.connect(audioContext.destination);
-
-  lead.start(when);
-  harmony.start(when);
-  low.start(when);
-  lead.stop(releaseAt + 0.05);
-  harmony.stop(releaseAt + 0.05);
-  low.stop(releaseAt + 0.05);
-}
-
 function scheduleClap(when, gainValue) {
   const duration = 0.028;
   const buffer = createNoiseBuffer(duration);
@@ -2969,7 +2766,6 @@ function setSoundMuted(rawValue) {
   }
   state.soundMuted = next;
   if (next) {
-    stopArgentinaAnthemSnippet(true);
     if (audioContext && audioContext.state === "running") {
       audioContext.suspend().catch(() => {});
     }
@@ -3684,88 +3480,121 @@ function normalizeSearch(value) {
   return value
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[’']/g, "")
+    .replace(/[^\p{L}\p{N}\s#*]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-function buildEmojiNameIndex(sections) {
+function loadEmojiCatalog() {
+  const catalog = globalThis?.TOCA_TOCA_EMOJI_CATALOG;
+  if (!catalog || typeof catalog !== "object") {
+    return null;
+  }
+  if (!Array.isArray(catalog.groups) || !catalog.emojiMap || typeof catalog.emojiMap !== "object") {
+    return null;
+  }
+  return catalog;
+}
+
+function buildEmojiNameIndex(sections, catalog) {
   const map = new Map();
-  const seed = [
-    ["😀", "grinning face", "cara sonriendo", ["smile", "sonrisa", "feliz"]],
-    ["😎", "smiling face with sunglasses", "cara con lentes de sol", ["cool", "lentes"]],
-    ["🤖", "robot", "robot", ["ia", "bot"]],
-    ["🔥", "fire", "fuego", ["hot", "caliente"]],
-    ["🍀", "four leaf clover", "trebol de cuatro hojas", ["luck", "suerte", "trebol"]],
-    ["🚀", "rocket", "cohete", ["space", "espacio"]],
-    ["🎯", "bullseye", "diana", ["target", "objetivo"]],
-    ["⭐", "star", "estrella", ["favorite", "favorito"]],
-    ["⚡", "high voltage", "rayo", ["energia", "electricidad"]],
-    ["🌈", "rainbow", "arcoiris", ["color"]],
-    ["😂", "face with tears of joy", "cara llorando de risa", ["jaja", "risa", "laugh"]],
-    ["😍", "smiling face with heart-eyes", "cara con ojos de corazon", ["amor", "love"]],
-    ["🥳", "partying face", "cara de fiesta", ["party", "fiesta"]],
-    ["😭", "loudly crying face", "cara llorando", ["triste", "cry"]],
-    ["👍", "thumbs up", "pulgar arriba", ["ok", "bien"]],
-    ["👏", "clapping hands", "aplausos", ["bravo", "clap"]],
-    ["🙏", "folded hands", "manos juntas", ["rezar", "please"]],
-    ["💪", "flexed biceps", "biceps flexionado", ["fuerza", "strong"]],
-    ["🐶", "dog face", "cara de perro", ["perro", "dog"]],
-    ["🐱", "cat face", "cara de gato", ["gato", "cat"]],
-    ["🦁", "lion", "leon", ["lion", "king"]],
-    ["🐼", "panda", "panda", ["oso"]],
-    ["🍕", "pizza", "pizza", ["comida", "food"]],
-    ["🍔", "hamburger", "hamburguesa", ["burger"]],
-    ["🍬", "candy", "caramelo", ["dulce", "sweet", "golosina"]],
-    ["🍭", "lollipop", "chupetin", ["caramelo", "dulce", "sweet", "paleta"]],
-    ["🍫", "chocolate bar", "chocolate", ["candy", "caramelo", "dulce", "sweet"]],
-    ["🌮", "taco", "taco", ["mexico"]],
-    ["🍣", "sushi", "sushi", ["japon", "japan"]],
-    ["☕", "hot beverage", "cafe", ["coffee"]],
-    ["🎉", "party popper", "confeti", ["celebracion", "party"]],
-    ["🏆", "trophy", "trofeo", ["winner", "ganador"]],
-    ["⚽", "soccer ball", "pelota de futbol", ["football", "futbol"]],
-    ["🏀", "basketball", "pelota de basquet", ["nba", "basket"]],
-    ["🎮", "video game", "videojuego", ["game", "juego"]],
-    ["🎵", "musical note", "nota musical", ["music", "musica"]],
-    ["📚", "books", "libros", ["book", "leer"]],
-    ["💼", "briefcase", "maletin", ["trabajo", "work"]],
-    ["💡", "light bulb", "bombilla", ["idea"]],
-    ["🧠", "brain", "cerebro", ["inteligencia", "brain"]],
-    ["❤️", "red heart", "corazon rojo", ["amor", "heart"]],
-    ["💙", "blue heart", "corazon azul", ["heart"]],
-    ["💚", "green heart", "corazon verde", ["heart"]],
-    ["🖤", "black heart", "corazon negro", ["heart"]],
-    ["🧡", "orange heart", "corazon naranja", ["heart"]],
-    ["💜", "purple heart", "corazon violeta", ["heart"]],
-    ["🤍", "white heart", "corazon blanco", ["heart"]],
-    ["🏳️", "white flag", "bandera blanca", ["flag", "bandera"]],
-    ["🏴", "black flag", "bandera negra", ["flag", "bandera"]],
-    ["🏁", "chequered flag", "bandera a cuadros", ["flag", "racing"]],
-  ];
+  const catalogMap = catalog?.emojiMap && typeof catalog.emojiMap === "object" ? catalog.emojiMap : null;
 
-  seed.forEach(([emoji, en, es, keywords]) => {
-    map.set(emoji, {
-      en,
-      es,
-      keywords: Array.isArray(keywords) ? keywords : [],
+  if (catalogMap) {
+    Object.entries(catalogMap).forEach(([emoji, rawMeta]) => {
+      if (!isLikelyEmoji(emoji) || !rawMeta || typeof rawMeta !== "object") {
+        return;
+      }
+      const en = typeof rawMeta.en === "string" ? rawMeta.en.trim() : "";
+      const es = typeof rawMeta.es === "string" ? rawMeta.es.trim() : "";
+      const aliasesEn = Array.isArray(rawMeta.aliasesEn)
+        ? rawMeta.aliasesEn.filter((alias) => typeof alias === "string" && alias.trim())
+        : [];
+      const aliasesEs = Array.isArray(rawMeta.aliasesEs)
+        ? rawMeta.aliasesEs.filter((alias) => typeof alias === "string" && alias.trim())
+        : [];
+      const groupLabelEn = typeof rawMeta.groupLabelEn === "string" ? rawMeta.groupLabelEn : "";
+      const groupLabelEs = typeof rawMeta.groupLabelEs === "string" ? rawMeta.groupLabelEs : "";
+      const subgroupLabelEn = typeof rawMeta.subgroupLabelEn === "string" ? rawMeta.subgroupLabelEn : "";
+      const subgroupLabelEs = typeof rawMeta.subgroupLabelEs === "string" ? rawMeta.subgroupLabelEs : "";
+      const keywords = [...aliasesEn, ...aliasesEs];
+      const searchable =
+        typeof rawMeta.searchable === "string" && rawMeta.searchable.trim()
+          ? normalizeSearch(rawMeta.searchable)
+          : normalizeSearch(
+              [
+                emoji,
+                en,
+                es,
+                ...aliasesEn,
+                ...aliasesEs,
+                groupLabelEn,
+                groupLabelEs,
+                subgroupLabelEn,
+                subgroupLabelEs,
+              ].join(" "),
+            );
+      map.set(emoji, {
+        en,
+        es,
+        aliasesEn,
+        aliasesEs,
+        keywords,
+        groupLabelEn,
+        groupLabelEs,
+        subgroupLabelEn,
+        subgroupLabelEs,
+        searchable,
+        title: buildEmojiTooltipTitle(emoji, es, en),
+      });
     });
-  });
-
-  mapFlagNames(map);
+  }
 
   sections.forEach((section) => {
     section.items.forEach((emoji) => {
-      const current = map.get(emoji) || { en: "", es: "", keywords: [] };
+      const current = map.get(emoji) || {
+        en: "",
+        es: "",
+        aliasesEn: [],
+        aliasesEs: [],
+        keywords: [],
+        groupLabelEn: "",
+        groupLabelEs: "",
+        subgroupLabelEn: "",
+        subgroupLabelEs: "",
+      };
       const searchable = normalizeSearch(
-        [current.en, current.es, section.label, ...section.keywords, ...current.keywords].join(" "),
+        [
+          emoji,
+          current.en,
+          current.es,
+          ...current.aliasesEn,
+          ...current.aliasesEs,
+          section.label,
+          ...section.keywords,
+          ...current.keywords,
+          current.groupLabelEn,
+          current.groupLabelEs,
+          current.subgroupLabelEn,
+          current.subgroupLabelEs,
+        ].join(" "),
       );
-      const title =
-        current.en || current.es ? `${emoji} - ${current.es || current.en} / ${current.en || current.es}` : emoji;
+      const es = current.es || current.en;
+      const en = current.en || current.es;
       map.set(emoji, {
-        en: current.en,
-        es: current.es,
+        en,
+        es,
+        aliasesEn: [...current.aliasesEn],
+        aliasesEs: [...current.aliasesEs],
         keywords: [...current.keywords],
+        groupLabelEn: current.groupLabelEn,
+        groupLabelEs: current.groupLabelEs,
+        subgroupLabelEn: current.subgroupLabelEn,
+        subgroupLabelEs: current.subgroupLabelEs,
         searchable,
-        title,
+        title: buildEmojiTooltipTitle(emoji, es, en),
       });
     });
   });
@@ -3773,52 +3602,18 @@ function buildEmojiNameIndex(sections) {
   return map;
 }
 
-function mapFlagNames(map) {
-  const flags = new Set();
-  EMOJI_SECTIONS.forEach((section) => {
-    if (section.id === "banderas") {
-      section.items.forEach((emoji) => flags.add(emoji));
-    }
-  });
-  if (flags.size === 0) {
-    return;
+function buildEmojiTooltipTitle(emoji, esName, enName) {
+  const es = typeof esName === "string" ? esName.trim() : "";
+  const en = typeof enName === "string" ? enName.trim() : "";
+  if (!es && !en) {
+    return emoji;
   }
-
-  let enDisplay = null;
-  let esDisplay = null;
-  try {
-    enDisplay = new Intl.DisplayNames(["en"], { type: "region" });
-    esDisplay = new Intl.DisplayNames(["es"], { type: "region" });
-  } catch (_error) {
-    enDisplay = null;
-    esDisplay = null;
-  }
-
-  flags.forEach((flag) => {
-    const code = flagToRegionCode(flag);
-    if (!code) {
-      return;
-    }
-    const en = enDisplay?.of(code) || code;
-    const es = esDisplay?.of(code) || code;
-    map.set(flag, {
-      en: `flag: ${en}`,
-      es: `bandera: ${es}`,
-      keywords: [code.toLowerCase(), "flag", "bandera", "country", "pais"],
-    });
-  });
+  return `${emoji} - ${es || en} / ${en || es}`;
 }
 
-function flagToRegionCode(flag) {
-  const symbols = Array.from(flag);
-  if (symbols.length !== 2) {
-    return "";
-  }
-  const chars = symbols.map((symbol) => symbol.codePointAt(0) || 0);
-  if (!chars.every((cp) => cp >= 0x1f1e6 && cp <= 0x1f1ff)) {
-    return "";
-  }
-  return String.fromCharCode(chars[0] - 0x1f1e6 + 65, chars[1] - 0x1f1e6 + 65);
+function buildEmojiAriaLabel(emoji, meta) {
+  const preferred = meta?.es || meta?.en || "";
+  return preferred ? `Elegir emoji ${emoji}: ${preferred}` : `Elegir emoji ${emoji}`;
 }
 
 function pickRandomColorFromPalette() {
@@ -3844,228 +3639,100 @@ function pickRandomEmojiFromFilter() {
   setEmojiFromModal(emoji);
 }
 
-function buildEmojiSections() {
+function buildEmojiSections(catalog) {
+  const favorites = DEFAULT_EMOJIS.map((emoji, index) => sanitizeEmoji(emoji, index));
   const sections = [
     {
       id: "favoritos",
       label: "Favoritos en uso",
       keywords: ["favoritos", "usados", "participantes", "top"],
-      ranges: [],
-      preset: DEFAULT_EMOJIS,
-    },
-    {
-      id: "caras",
-      label: "Caras y emociones",
-      keywords: ["cara", "caras", "emocion", "feliz", "triste", "smile", "face", "laugh", "risa"],
-      ranges: [
-        [0x1f600, 0x1f64f],
-        [0x1f910, 0x1f92f],
-        [0x1f970, 0x1f97a],
-      ],
-    },
-    {
-      id: "personas",
-      label: "Personas y manos",
-      keywords: ["persona", "mano", "gesto", "gente", "hands", "people", "human", "body"],
-      ranges: [
-        [0x1f44a, 0x1f64b],
-        [0x1f466, 0x1f487],
-        [0x1f9cd, 0x1f9dd],
-      ],
-    },
-    {
-      id: "animales",
-      label: "Animales y naturaleza",
-      keywords: ["animal", "naturaleza", "plantas", "pet", "nature", "dog", "cat", "perro", "gato"],
-      ranges: [
-        [0x1f330, 0x1f43e],
-        [0x1f980, 0x1f9a2],
-      ],
-    },
-    {
-      id: "comida",
-      label: "Comida y bebida",
-      keywords: [
-        "comida",
-        "bebida",
-        "food",
-        "drink",
-        "candy",
-        "caramelo",
-        "dulce",
-        "sweet",
-        "golosina",
-      ],
-      ranges: [
-        [0x1f345, 0x1f37f],
-        [0x1f950, 0x1f96f],
-      ],
-    },
-    {
-      id: "deporte",
-      label: "Actividades y deporte",
-      keywords: ["deporte", "actividad", "futbol", "juego", "sport", "sports", "fitness"],
-      ranges: [
-        [0x1f3a0, 0x1f3cf],
-        [0x1f93a, 0x1f94f],
-      ],
-    },
-    {
-      id: "viaje",
-      label: "Viajes y lugares",
-      keywords: ["viaje", "lugar", "auto", "avion", "travel", "trip", "city", "ciudad"],
-      ranges: [
-        [0x1f680, 0x1f6c5],
-        [0x1f5fa, 0x1f5ff],
-      ],
-    },
-    {
-      id: "objetos",
-      label: "Objetos y simbolos",
-      keywords: [
-        "objeto",
-        "simbolo",
-        "herramienta",
-        "icons",
-        "symbol",
-        "tools",
-        "heart",
-        "corazon",
-      ],
-      ranges: [
-        [0x1f4a0, 0x1f4ff],
-        [0x1f500, 0x1f53d],
-        [0x1f6e0, 0x1f6ec],
-        [0x1f9f0, 0x1f9ff],
-        [0x1fa70, 0x1faff],
-      ],
-      preset: [
-        "❤️",
-        "🧡",
-        "💛",
-        "💚",
-        "💙",
-        "💜",
-        "🖤",
-        "🤍",
-        "🤎",
-        "💔",
-        "💕",
-        "💖",
-        "✨",
-        "⭐",
-        "🌟",
-        "⚡",
-        "☕",
-        "☎️",
-        "✉️",
-        "⚠️",
-        "✅",
-        "❌",
-        "⚽",
-        "🏀",
-      ],
-    },
-    {
-      id: "banderas",
-      label: "Banderas",
-      keywords: ["bandera", "banderas", "flag", "flags", "country", "pais", "paises"],
-      ranges: [],
-      preset: buildFlagEmojiList(),
+      items: Array.from(new Set(favorites)),
     },
   ];
 
-  const used = new Set();
-  return sections
-    .map((section) => {
-      const items = [];
-      if (Array.isArray(section.preset)) {
-        section.preset.forEach((emoji) => {
-          const normalized = sanitizeEmoji(emoji);
-          if (!used.has(normalized)) {
-            used.add(normalized);
-            items.push(normalized);
-          }
-        });
-      }
+  if (!catalog || !Array.isArray(catalog.groups)) {
+    return sections;
+  }
 
-      section.ranges.forEach(([start, end]) => {
-        items.push(...collectEmojiFromRange(start, end, used));
+  const used = new Set();
+  catalog.groups.forEach((group) => {
+    if (!group || typeof group !== "object" || !Array.isArray(group.subgroups)) {
+      return;
+    }
+    const groupLabelEs = typeof group.labelEs === "string" && group.labelEs.trim() ? group.labelEs.trim() : "";
+    const groupLabelEn = typeof group.labelEn === "string" && group.labelEn.trim() ? group.labelEn.trim() : "";
+    const groupLabel = groupLabelEs || groupLabelEn || "Grupo";
+
+    group.subgroups.forEach((subgroup) => {
+      if (!subgroup || typeof subgroup !== "object" || !Array.isArray(subgroup.items)) {
+        return;
+      }
+      const subgroupLabelEs =
+        typeof subgroup.labelEs === "string" && subgroup.labelEs.trim() ? subgroup.labelEs.trim() : "";
+      const subgroupLabelEn =
+        typeof subgroup.labelEn === "string" && subgroup.labelEn.trim() ? subgroup.labelEn.trim() : "";
+      const subgroupLabel = subgroupLabelEs || subgroupLabelEn || "Subgrupo";
+      const items = [];
+
+      subgroup.items.forEach((rawEmoji) => {
+        if (typeof rawEmoji !== "string" || !rawEmoji.trim()) {
+          return;
+        }
+        const emoji = firstGrapheme(rawEmoji.trim());
+        if (!isLikelyEmoji(emoji) || used.has(emoji)) {
+          return;
+        }
+        used.add(emoji);
+        items.push(emoji);
       });
 
-      return {
-        id: section.id,
-        label: section.label,
-        keywords: section.keywords || [],
+      if (items.length === 0) {
+        return;
+      }
+
+      const sectionId =
+        typeof subgroup.id === "string" && subgroup.id.trim()
+          ? subgroup.id.trim()
+          : `${group.id || groupLabel}-${subgroupLabel}`.toLowerCase().replace(/\s+/g, "-");
+      const keywords = uniqueSearchKeywords([
+        groupLabel,
+        groupLabelEs,
+        groupLabelEn,
+        subgroupLabel,
+        subgroupLabelEs,
+        subgroupLabelEn,
+      ]);
+
+      sections.push({
+        id: sectionId,
+        label: `${groupLabel} · ${subgroupLabel}`,
+        keywords,
         items,
-      };
-    })
-    .filter((section) => section.items.length > 0);
-}
-
-function buildFlagEmojiList() {
-  const fallback = AMERICA_REGION_CODES;
-  const codes = [...AMERICA_REGION_CODES, ...getRegionCodes()];
-  const uniqueCodes = [];
-  const codeSet = new Set();
-  codes.forEach((code) => {
-    if (typeof code !== "string") {
-      return;
-    }
-    const normalizedCode = code.trim().toUpperCase();
-    if (!/^[A-Z]{2}$/.test(normalizedCode) || codeSet.has(normalizedCode)) {
-      return;
-    }
-    codeSet.add(normalizedCode);
-    uniqueCodes.push(normalizedCode);
+      });
+    });
   });
-  const flags = [];
-  uniqueCodes.forEach((code) => {
-    const flag = regionCodeToFlag(code);
-    if (flag && isLikelyEmoji(flag)) {
-      flags.push(flag);
-    }
-  });
-  if (flags.length > 0) {
-    return flags;
-  }
-  return fallback
-    .map((code) => regionCodeToFlag(code))
-    .filter((flag) => Boolean(flag) && isLikelyEmoji(flag));
+
+  return sections.filter((section) => section.items.length > 0);
 }
 
-function getRegionCodes() {
-  try {
-    if (typeof Intl !== "undefined" && typeof Intl.supportedValuesOf === "function") {
-      return Intl.supportedValuesOf("region").filter((value) => /^[A-Z]{2}$/.test(value));
-    }
-  } catch (_error) {
-    // fallback below
-  }
-  return ["AR", "US", "ES", "BR", "MX", "UY", "CL", "CO", "PE", "FR", "DE", "IT", "GB", "JP"];
-}
-
-function regionCodeToFlag(code) {
-  if (typeof code !== "string" || !/^[A-Z]{2}$/.test(code)) {
-    return "";
-  }
-  const points = [...code].map((letter) => 0x1f1e6 + letter.charCodeAt(0) - 65);
-  return String.fromCodePoint(...points);
-}
-
-function collectEmojiFromRange(start, end, used) {
+function uniqueSearchKeywords(values) {
   const list = [];
-  for (let codePoint = start; codePoint <= end; codePoint += 1) {
-    const emoji = String.fromCodePoint(codePoint);
-    if (!isLikelyEmoji(emoji)) {
-      continue;
+  const seen = new Set();
+  values.forEach((value) => {
+    if (typeof value !== "string") {
+      return;
     }
-    const normalized = firstGrapheme(emoji);
-    if (!used.has(normalized)) {
-      used.add(normalized);
-      list.push(normalized);
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return;
     }
-  }
+    const normalized = normalizeSearch(trimmed);
+    if (!normalized || seen.has(normalized)) {
+      return;
+    }
+    seen.add(normalized);
+    list.push(trimmed);
+  });
   return list;
 }
 
@@ -4306,6 +3973,69 @@ function spawnEmojiWinnerDrops(emoji) {
     refs.emojiRain.append(drop);
   }
   return maxDropMs;
+}
+
+function spawnArgentinaEasterEggDrops() {
+  const profile = WINNER_EFFECT_PROFILE;
+  const dropCount = clamp(Math.round(96 * profile.scale), 62, 132);
+  const lanes = 9;
+  const laneWidthPct = 100 / lanes;
+  let maxDropMs = 0;
+  const fragment = document.createDocumentFragment();
+
+  for (let i = 0; i < dropCount; i += 1) {
+    const drop = document.createElement("span");
+    drop.className = "emoji-drop emoji-drop-argentina";
+    const pickFocus = Math.random() < 0.56;
+    const pickFeatured = i % 11 === 0 || Math.random() < 0.2;
+    const source = pickFocus
+      ? ARGENTINA_EASTER_EGG_FOCUS_EMOJIS
+      : pickFeatured
+        ? ARGENTINA_EASTER_EGG_FEATURED_EMOJIS
+        : ARGENTINA_EASTER_EGG_EMOJI_POOL;
+    const emoji = source[randomInt(0, source.length - 1)] || "🇦🇷";
+    drop.textContent = emoji;
+
+    if (emoji === "🇦🇷") {
+      drop.classList.add("is-flag");
+    } else if (emoji === "🧉") {
+      drop.classList.add("is-mate");
+    } else if (emoji === "⚽") {
+      drop.classList.add("is-ball");
+    } else if (emoji === "⭐" || emoji === "🌟") {
+      drop.classList.add("is-star");
+    }
+
+    const laneIndex = i % lanes;
+    const laneCenterPct = laneIndex * laneWidthPct + laneWidthPct * 0.5;
+    const left = clamp(laneCenterPct + randomFloat(-laneWidthPct * 0.42, laneWidthPct * 0.42), 1, 99);
+    drop.style.left = `${left.toFixed(2)}%`;
+
+    let minFont = 24;
+    let maxFont = 52;
+    if (emoji === "🇦🇷") {
+      minFont = 30;
+      maxFont = 58;
+    } else if (emoji === "🧉" || emoji === "⚽") {
+      minFont = 28;
+      maxFont = 56;
+    } else if (emoji === "⭐" || emoji === "🌟") {
+      minFont = 22;
+      maxFont = 48;
+    }
+    drop.style.fontSize = `${randomInt(minFont, maxFont)}px`;
+
+    const durationSec = randomFloat(3.35, 6.9);
+    const delaySec = randomFloat(0, 1.45) + (i % 9) * 0.02;
+    drop.style.animationDuration = `${durationSec.toFixed(2)}s`;
+    drop.style.animationDelay = `${delaySec.toFixed(2)}s`;
+    drop.style.setProperty("--drift-x", `${randomInt(-180, 180)}px`);
+    drop.style.setProperty("--spin", `${randomInt(-480, 480)}deg`);
+    maxDropMs = Math.max(maxDropMs, (durationSec + delaySec) * 1000);
+    fragment.append(drop);
+  }
+  refs.emojiRain.append(fragment);
+  return Math.max(maxDropMs, 4200);
 }
 
 function spawnEmojiWinnerDropsExtreme(emoji) {
