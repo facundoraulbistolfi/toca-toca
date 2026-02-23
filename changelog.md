@@ -32,6 +32,9 @@ Fecha de corte: 22 de febrero de 2026
 - Limite de nombre por participante: `10` caracteres.
 - Selector de color en modal: grilla por paletas, RGB y codigo hex.
 - Selector de emoji en modal con secciones, busqueda y random.
+- Catalogo completo de emojis basado en Unicode/CLDR, con nombres reales en espanol e ingles.
+- Busqueda de emojis por texto parcial y tokens en ES/EN (incluye aliases oficiales).
+- Dataset local `emoji-catalog.js` para uso offline y script de regeneracion oficial.
 - Selector de animacion por participante:
   - puede heredar la animacion general
   - o usar una animacion particular
