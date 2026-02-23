@@ -8,7 +8,7 @@ App web estilo casino para decidir a quien le toca, con una ruleta totalmente co
 
 ## Version actual
 
-`v1.0.0` - primera version productiva.
+`v1.1.0`
 
 ## Autor y creditos
 
