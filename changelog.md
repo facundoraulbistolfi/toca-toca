@@ -1,8 +1,14 @@
 # Changelog
 
-## Version actual: v0.0.1
+## Version actual: v1.0.0
 
-Fecha de corte: 22 de febrero de 2026
+Fecha de corte: 23 de febrero de 2026
+
+## v1.0.0 - 2026-02-23
+
+### Lanzamiento productivo
+
+- Primera version productiva publicada.
 
 ## v0.0.1 - 2026-02-22
 
