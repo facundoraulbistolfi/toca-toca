@@ -1,6 +1,8 @@
 const CONFIG_VERSION = 1;
+const STATS_VERSION = 2;
 const COOKIE_KEY = "tocaTocaConfig";
 const STORAGE_KEY = "tocaTocaConfigFallback";
+const STATS_STORAGE_KEY = "tocaTocaSpinStats";
 const DEFAULT_SPIN_DURATION_MIN = 5;
 const DEFAULT_SPIN_DURATION_MAX = 8;
 const MIN_SPIN_DURATION = 1;
@@ -171,11 +173,14 @@ const PALETTE = [
 ];
 
 const DEFAULT_PARTICIPANTS = [
-  { name: "Facu", color: "#6F9C7F", emoji: "📚" },
-  { name: "Dai", color: "#D98F97", emoji: "💄" },
-  { name: "Candy", color: "#8ECADA", emoji: "🍬" },
-  { name: "Aaron", color: "#EB791E", emoji: "🐈" },
-  { name: "El pipi", color: "#2F323A", emoji: "🐈‍⬛" },
+  { id: "alexei", name: "Alexei", color: "#D9553B", emoji: "🎲" },
+  { id: "polina", name: "Polina", color: "#33658A", emoji: "🖤" },
+  { id: "general", name: "General", color: "#6DA34D", emoji: "🎖️" },
+  { id: "antonida", name: "Antonida", color: "#4E7C59", emoji: "👵" },
+  { id: "blanche", name: "Blanche", color: "#B06B3D", emoji: "💃" },
+  { id: "degrieux", name: "De Grieux", color: "#A23E48", emoji: "🕴️" },
+  { id: "astley", name: "Mr Astley", color: "#8E6C88", emoji: "🎩" },
+  { id: "potapych", name: "Potapych", color: "#7A9E9F", emoji: "🧳" },
 ];
 const CARD_RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
 const CARD_SUITS = [
@@ -191,6 +196,7 @@ const refs = {
   hero: document.querySelector(".hero"),
   configPanelToggle: document.getElementById("configPanelToggle"),
   soundToggle: document.getElementById("soundToggle"),
+  statsPanelToggle: document.getElementById("statsPanelToggle"),
   infoPanelToggle: document.getElementById("infoPanelToggle"),
   configPanelClose: document.getElementById("configPanelClose"),
   configPanel: document.getElementById("configPanel"),
@@ -249,6 +255,17 @@ const refs = {
   resetConfirmClose: document.getElementById("resetConfirmClose"),
   resetConfirmAccept: document.getElementById("resetConfirmAccept"),
   resetConfirmCancel: document.getElementById("resetConfirmCancel"),
+  resetScopeConfig: document.getElementById("resetScopeConfig"),
+  resetScopeUsers: document.getElementById("resetScopeUsers"),
+  resetScopeHistory: document.getElementById("resetScopeHistory"),
+  statsModal: document.getElementById("statsModal"),
+  statsModalClose: document.getElementById("statsModalClose"),
+  statsLastWinner: document.getElementById("statsLastWinner"),
+  statsLastWinnerStatus: document.getElementById("statsLastWinnerStatus"),
+  statsLongestStreak: document.getElementById("statsLongestStreak"),
+  statsTableBody: document.getElementById("statsTableBody"),
+  statsTableWrap: document.getElementById("statsTableWrap"),
+  statsEmptyState: document.getElementById("statsEmptyState"),
 };
 
 const ctx = refs.canvas?.getContext("2d");
@@ -257,6 +274,7 @@ if (!ctx) {
 }
 
 let state = loadState();
+let stats = loadStats();
 let currentRotationDeg = 0;
 let isSpinning = false;
 let celebrationTimeoutId = null;
@@ -305,6 +323,7 @@ function bindEvents() {
   refs.resetButton.addEventListener("click", openResetConfirmModal);
   refs.configPanelToggle.addEventListener("click", toggleConfigPanel);
   refs.soundToggle.addEventListener("click", () => setSoundMuted(!state.soundMuted));
+  refs.statsPanelToggle.addEventListener("click", openStatsModal);
   refs.infoPanelToggle.addEventListener("click", openInfoModal);
   refs.configPanelClose.addEventListener("click", () => closeConfigPanel(true));
   refs.configBackdrop.addEventListener("click", () => closeConfigPanel(true));
@@ -429,6 +448,12 @@ function bindEvents() {
     }
   });
   refs.infoModalClose.addEventListener("click", closeInfoModal);
+  refs.statsModal.addEventListener("click", (event) => {
+    if (event.target instanceof HTMLElement && event.target.hasAttribute("data-close-stats-modal")) {
+      closeStatsModal();
+    }
+  });
+  refs.statsModalClose.addEventListener("click", closeStatsModal);
   if (refs.argentinaFlagButton instanceof HTMLElement) {
     refs.argentinaFlagButton.addEventListener("click", triggerInfoEasterEgg);
   }
@@ -440,6 +465,9 @@ function bindEvents() {
   refs.resetConfirmClose.addEventListener("click", closeResetConfirmModal);
   refs.resetConfirmCancel.addEventListener("click", closeResetConfirmModal);
   refs.resetConfirmAccept.addEventListener("click", confirmResetState);
+  refs.resetScopeConfig.addEventListener("change", updateResetConfirmAcceptState);
+  refs.resetScopeUsers.addEventListener("change", updateResetConfirmAcceptState);
+  refs.resetScopeHistory.addEventListener("change", updateResetConfirmAcceptState);
   window.addEventListener("pointerup", requestStopEmojiModalPreviewHose, { passive: true });
   window.addEventListener("pointercancel", requestStopEmojiModalPreviewHose, { passive: true });
   window.addEventListener("blur", requestStopEmojiModalPreviewHose);
@@ -461,6 +489,10 @@ function bindEvents() {
     }
     if (event.key === "Escape" && !refs.resetConfirmModal.hidden) {
       closeResetConfirmModal();
+      return;
+    }
+    if (event.key === "Escape" && !refs.statsModal.hidden) {
+      closeStatsModal();
       return;
     }
     if (event.key === "Escape") {
@@ -607,10 +639,29 @@ function openInfoModal() {
   refs.infoPanelToggle.setAttribute("aria-expanded", "true");
 }
 
-function closeInfoModal() {
+function closeInfoModal(restoreFocus = true) {
   refs.infoModal.hidden = true;
   refs.infoPanelToggle.setAttribute("aria-expanded", "false");
-  refs.infoPanelToggle.focus();
+  if (restoreFocus) {
+    refs.infoPanelToggle.focus();
+  }
+}
+
+function openStatsModal() {
+  if (isSpinning) {
+    return;
+  }
+  renderStats();
+  refs.statsModal.hidden = false;
+  refs.statsPanelToggle.setAttribute("aria-expanded", "true");
+}
+
+function closeStatsModal(restoreFocus = true) {
+  refs.statsModal.hidden = true;
+  refs.statsPanelToggle.setAttribute("aria-expanded", "false");
+  if (restoreFocus) {
+    refs.statsPanelToggle.focus();
+  }
 }
 
 function triggerInfoEasterEgg() {
@@ -633,17 +684,44 @@ function openResetConfirmModal() {
   if (isSpinning) {
     return;
   }
+  refs.resetScopeConfig.checked = true;
+  refs.resetScopeUsers.checked = true;
+  refs.resetScopeHistory.checked = true;
+  updateResetConfirmAcceptState();
   refs.resetConfirmModal.hidden = false;
 }
 
-function closeResetConfirmModal() {
+function closeResetConfirmModal(restoreFocus = true) {
   refs.resetConfirmModal.hidden = true;
-  refs.resetButton.focus();
+  if (restoreFocus) {
+    refs.resetButton.focus();
+  }
 }
 
 function confirmResetState() {
+  const scopes = getSelectedResetScopes();
+  if (!hasAnyResetScopeSelected(scopes)) {
+    updateResetConfirmAcceptState();
+    return;
+  }
   closeResetConfirmModal();
-  resetState();
+  applyResetScopes(scopes);
+}
+
+function getSelectedResetScopes() {
+  return {
+    config: refs.resetScopeConfig.checked === true,
+    users: refs.resetScopeUsers.checked === true,
+    history: refs.resetScopeHistory.checked === true,
+  };
+}
+
+function hasAnyResetScopeSelected(scopes = getSelectedResetScopes()) {
+  return scopes.config || scopes.users || scopes.history;
+}
+
+function updateResetConfirmAcceptState() {
+  refs.resetConfirmAccept.disabled = isSpinning || !hasAnyResetScopeSelected();
 }
 
 function initColorModal() {
@@ -933,6 +1011,7 @@ function render() {
   renderSoundToggle();
   drawWheel();
   setControlsDisabled(isSpinning);
+  renderStats();
 }
 
 function renderSoundToggle() {
@@ -1020,12 +1099,14 @@ function renderItemList() {
       state.items[index].name = String(nameInput.value || "").slice(0, MAX_PARTICIPANT_NAME_LENGTH);
       saveState();
       drawWheel();
+      renderStats();
     });
     nameInput.addEventListener("blur", () => {
       state.items[index].name = normalizeName(nameInput.value, index);
       nameInput.value = state.items[index].name;
       saveState();
       drawWheel();
+      renderStats();
     });
 
     const colorSwatch = document.createElement("button");
@@ -1145,6 +1226,181 @@ function renderItemList() {
   });
 
   renderRetrySliceRow();
+}
+
+function renderStats() {
+  if (
+    !(refs.statsLastWinner instanceof HTMLElement) ||
+    !(refs.statsLastWinnerStatus instanceof HTMLElement) ||
+    !(refs.statsLongestStreak instanceof HTMLElement) ||
+    !(refs.statsTableBody instanceof HTMLElement) ||
+    !(refs.statsTableWrap instanceof HTMLElement) ||
+    !(refs.statsEmptyState instanceof HTMLElement)
+  ) {
+    return;
+  }
+
+  const latest = stats?.lastWinner || null;
+  if (latest && typeof latest.participantId === "string" && latest.participantId.trim()) {
+    const display = resolveParticipantDisplay(latest.participantId, {
+      name: latest.name,
+      emoji: latest.emoji,
+      color: latest.color,
+    });
+    refs.statsLastWinner.replaceChildren(buildStatsPlayerChip(display));
+  } else {
+    refs.statsLastWinner.replaceChildren(
+      buildStatsPlayerChip(
+        { emoji: "🕳️", name: "Sin datos", color: "#B18A64" },
+        true,
+      ),
+    );
+  }
+
+  const currentStreakCount =
+    latest && stats?.streak?.participantId === latest.participantId
+      ? Math.max(1, Math.round(Number(stats.streak.count) || 1))
+      : 0;
+  refs.statsLastWinnerStatus.classList.remove("is-hot");
+  if (!latest) {
+    refs.statsLastWinnerStatus.textContent = "Sin historial de salidas.";
+  } else if (currentStreakCount > 1) {
+    refs.statsLastWinnerStatus.textContent = `En racha 🔥 x${currentStreakCount}.`;
+    refs.statsLastWinnerStatus.classList.add("is-hot");
+  } else {
+    refs.statsLastWinnerStatus.textContent = "Sin racha activa.";
+  }
+
+  refs.statsLongestStreak.replaceChildren();
+  if (stats?.bestStreak?.participantId && Number(stats.bestStreak.count) > 0) {
+    const display = resolveParticipantDisplay(stats.bestStreak.participantId, stats.bestStreak.snapshot);
+    const streakCount = Math.max(1, Math.round(Number(stats.bestStreak.count) || 1));
+    const row = document.createElement("p");
+    row.className = "stats-streak";
+    const badge = document.createElement("span");
+    badge.className = "stats-streak-badge";
+    badge.textContent = `🔥 x${streakCount}`;
+    const label = document.createElement("span");
+    label.textContent = `${sanitizeEmoji(display.emoji)} ${normalizeName(display.name)}`.trim();
+    row.append(badge, label);
+    refs.statsLongestStreak.append(row);
+  } else {
+    const empty = document.createElement("p");
+    empty.className = "stats-streak";
+    empty.textContent = "Sin rachas registradas.";
+    refs.statsLongestStreak.append(empty);
+  }
+
+  const totals = Array.isArray(stats?.totals) ? stats.totals.filter((entry) => Number(entry?.count) > 0) : [];
+  refs.statsTableBody.replaceChildren();
+  if (totals.length === 0) {
+    refs.statsEmptyState.hidden = false;
+    refs.statsTableWrap.hidden = true;
+    return;
+  }
+
+  refs.statsEmptyState.hidden = true;
+  refs.statsTableWrap.hidden = false;
+
+  const sorted = totals
+    .slice()
+    .sort((a, b) => {
+      const countDiff = (Number(b?.count) || 0) - (Number(a?.count) || 0);
+      if (countDiff !== 0) {
+        return countDiff;
+      }
+      const seenDiff = (Number(b?.lastSeenAt) || 0) - (Number(a?.lastSeenAt) || 0);
+      if (seenDiff !== 0) {
+        return seenDiff;
+      }
+      const displayA = resolveParticipantDisplay(a?.participantId, a?.snapshot);
+      const displayB = resolveParticipantDisplay(b?.participantId, b?.snapshot);
+      return normalizeName(displayA.name).localeCompare(normalizeName(displayB.name), "es", { sensitivity: "base" });
+    });
+
+  sorted.forEach((entry, index) => {
+    const tr = document.createElement("tr");
+
+    const rankTd = document.createElement("td");
+    rankTd.className = "stats-rank-cell";
+    rankTd.textContent = String(index + 1);
+
+    const playerTd = document.createElement("td");
+    const display = resolveParticipantDisplay(entry.participantId, entry.snapshot);
+    const playerCell = document.createElement("div");
+    playerCell.className = "stats-player-cell";
+    playerCell.append(buildStatsPlayerChip(display));
+    playerTd.append(playerCell);
+
+    const countTd = document.createElement("td");
+    countTd.className = "stats-count-cell";
+    countTd.textContent = String(Math.max(1, Math.round(Number(entry.count) || 1)));
+
+    tr.append(rankTd, playerTd, countTd);
+    refs.statsTableBody.append(tr);
+  });
+}
+
+function buildStatsPlayerChip(rawDisplay, forceEmpty = false) {
+  const display = resolveParticipantDisplay(rawDisplay?.participantId, rawDisplay);
+  const isRemoved = !forceEmpty && display.removed === true;
+  const chip = document.createElement("div");
+  chip.className = "stats-player-chip";
+  if (forceEmpty) {
+    chip.classList.add("stats-player-chip-empty");
+  }
+  if (isRemoved) {
+    chip.classList.add("stats-player-chip-removed");
+    chip.title = "Ya no esta en la ruleta";
+  }
+  chip.style.setProperty("--player-color", sanitizeColor(display.color));
+
+  const emoji = document.createElement("span");
+  emoji.className = "stats-player-emoji";
+  emoji.textContent = sanitizeEmoji(display.emoji);
+
+  const name = document.createElement("span");
+  name.className = "stats-player-name";
+  name.textContent = normalizeName(display.name);
+  if (isRemoved) {
+    name.classList.add("stats-player-name-removed");
+  }
+
+  chip.append(emoji, name);
+  if (isRemoved) {
+    const removedMark = document.createElement("span");
+    removedMark.className = "stats-player-removed-mark";
+    removedMark.textContent = "✝";
+    removedMark.title = "Ya no esta en la ruleta";
+    removedMark.setAttribute("aria-hidden", "true");
+    chip.append(removedMark);
+  }
+
+  return chip;
+}
+
+function resolveParticipantDisplay(participantId, snapshot) {
+  const safeId = typeof participantId === "string" ? participantId.trim() : "";
+  const live = safeId ? state.items.find((item) => String(item?.id || "").trim() === safeId) : null;
+
+  if (live) {
+    const liveIndex = state.items.indexOf(live);
+    return {
+      participantId: safeId,
+      name: normalizeName(live.name, liveIndex),
+      emoji: sanitizeEmoji(live.emoji, liveIndex),
+      color: sanitizeColor(live.color, liveIndex),
+      removed: false,
+    };
+  }
+
+  return {
+    participantId: safeId,
+    name: normalizeName(snapshot?.name, 0),
+    emoji: sanitizeEmoji(snapshot?.emoji, 0),
+    color: sanitizeColor(snapshot?.color, 0),
+    removed: Boolean(safeId),
+  };
 }
 
 function renderRetrySliceRow() {
@@ -1269,6 +1525,7 @@ function confirmColorModalSelection() {
     }
     saveState();
     drawWheel();
+    renderStats();
     closeColorModal();
     return;
   }
@@ -1281,6 +1538,7 @@ function confirmColorModalSelection() {
   }
   saveState();
   drawWheel();
+  renderStats();
   closeColorModal();
 }
 
@@ -1373,6 +1631,7 @@ function confirmEmojiModalSelection() {
 
   saveState();
   drawWheel();
+  renderStats();
   closeEmojiModal();
 }
 
@@ -2108,6 +2367,12 @@ function finalizeSpin(stoppedByClick) {
   }
 
   const winnerItem = winnerEntry?.item;
+  if (!winnerItem || typeof winnerItem !== "object") {
+    refs.resultText.textContent = "No se pudo resolver un ganador valido.";
+    setMessage("Ocurrio un problema al registrar el resultado del giro.", "error");
+    return;
+  }
+  recordWinner(winnerItem);
   const winnerLabel = formatParticipantLabel(winnerItem);
   refs.resultText.textContent = `Ganó ${winnerLabel}.`;
   playSpinEndFanfare();
@@ -2650,15 +2915,103 @@ function removeParticipant(index) {
   setMessage("Participante eliminado.", "success");
 }
 
-function resetState() {
-  state = defaultState();
-  currentRotationDeg = 0;
-  isSpinning = false;
-  setRimLightMode(RIM_LIGHT_MODE.STANDBY);
-  saveState();
+function resetConfigScope() {
+  const defaults = defaultState();
+  state.spinDurationMinSec = defaults.spinDurationMinSec;
+  state.spinDurationMaxSec = defaults.spinDurationMaxSec;
+  state.textLayout = defaults.textLayout;
+  state.wheelEmojiMode = defaults.wheelEmojiMode;
+  state.textPositionPct = defaults.textPositionPct;
+  state.fontSizePx = defaults.fontSizePx;
+  state.fontFamilyId = defaults.fontFamilyId;
+  state.winnerAnimationMode = defaults.winnerAnimationMode;
+  state.retrySliceEnabled = defaults.retrySliceEnabled;
+  state.retrySlicePct = defaults.retrySlicePct;
+  state.retrySliceColor = defaults.retrySliceColor;
+  normalizeVisiblePercentages(
+    state.items,
+    getParticipantSharePctForConfig(state.retrySliceEnabled, state.retrySlicePct),
+  );
+}
+
+function resetUsersScope() {
+  const defaults = defaultState();
+  state.items = defaults.items.map((item) => ({ ...item }));
+  normalizeVisiblePercentages(
+    state.items,
+    getParticipantSharePctForConfig(state.retrySliceEnabled, state.retrySlicePct),
+  );
+}
+
+function resetHistoryScope() {
+  stats = defaultStats();
+  saveStats();
+}
+
+function applyResetScopes(scopes) {
+  const safeScopes = {
+    config: scopes?.config === true,
+    users: scopes?.users === true,
+    history: scopes?.history === true,
+  };
+  if (!hasAnyResetScopeSelected(safeScopes)) {
+    return;
+  }
+
+  clearWinnerCelebrationVisuals();
+  if (safeScopes.config) {
+    resetConfigScope();
+  }
+  if (safeScopes.users) {
+    resetUsersScope();
+  }
+  if (safeScopes.history) {
+    resetHistoryScope();
+  }
+
+  if (safeScopes.config || safeScopes.users) {
+    currentRotationDeg = 0;
+    isSpinning = false;
+    setRimLightMode(RIM_LIGHT_MODE.STANDBY);
+    if (sanitizeSoundMuted(state.soundMuted)) {
+      if (audioContext && audioContext.state === "running") {
+        audioContext.suspend().catch(() => {});
+      }
+    } else {
+      resumeAudioContext(true);
+    }
+    saveState();
+  }
+
   render();
-  refs.resultText.textContent = "Configuracion restablecida. Listo para girar.";
-  setMessage("Se restablecio la configuracion por defecto.", "success");
+  const summary = describeResetScopes(safeScopes);
+  refs.resultText.textContent = summary.resultText;
+  setMessage(summary.message, "success");
+}
+
+function describeResetScopes(scopes) {
+  if (scopes.config && scopes.users && scopes.history) {
+    return {
+      resultText: "Todo restablecido. Listo para girar.",
+      message: "Se restablecio todo.",
+    };
+  }
+
+  const labels = [];
+  if (scopes.config) {
+    labels.push("configuracion");
+  }
+  if (scopes.users) {
+    labels.push("usuarios");
+  }
+  if (scopes.history) {
+    labels.push("historial");
+  }
+  const joined = labels.join(", ");
+  return {
+    resultText: `Restablecimiento aplicado: ${joined}.`,
+    message: `Se restablecio ${joined}.`,
+  };
 }
 
 function setSpinDurationMin(rawValue) {
@@ -3006,7 +3359,10 @@ function loadState() {
 
 function defaultState() {
   const items = DEFAULT_PARTICIPANTS.map((participant, index) => ({
-    id: makeId(),
+    id:
+      typeof participant?.id === "string" && participant.id.trim()
+        ? participant.id.trim()
+        : makeId(),
     emoji: sanitizeEmoji(participant.emoji, index),
     name: normalizeName(participant.name, index),
     color: sanitizeColor(participant.color, index),
@@ -3131,6 +3487,271 @@ function saveState() {
   }
 }
 
+function defaultStats() {
+  return {
+    version: STATS_VERSION,
+    lastWinner: null,
+    streak: null,
+    bestStreak: null,
+    totals: [],
+  };
+}
+
+function sanitizeStatsParticipantId(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function sanitizeStatsSnapshot(input, index = 0) {
+  return {
+    name: normalizeName(input?.name, index),
+    emoji: sanitizeEmoji(input?.emoji, index),
+    color: sanitizeColor(input?.color, index),
+  };
+}
+
+function sanitizeStats(input) {
+  if (!input || typeof input !== "object") {
+    return defaultStats();
+  }
+
+  const rawTotals = Array.isArray(input.totals) ? input.totals : [];
+  const totalsByParticipant = new Map();
+
+  rawTotals.forEach((entry, index) => {
+    const participantId = sanitizeStatsParticipantId(entry?.participantId);
+    if (!participantId) {
+      return;
+    }
+    const count = Math.max(0, Math.round(Number(entry?.count) || 0));
+    if (count <= 0) {
+      return;
+    }
+    const lastSeenAt = Math.max(0, Math.round(Number(entry?.lastSeenAt) || 0));
+    const snapshot = sanitizeStatsSnapshot(entry?.snapshot, index);
+    const existing = totalsByParticipant.get(participantId);
+
+    if (!existing) {
+      totalsByParticipant.set(participantId, {
+        participantId,
+        count,
+        snapshot,
+        lastSeenAt,
+      });
+      return;
+    }
+
+    existing.count += count;
+    if (lastSeenAt >= existing.lastSeenAt) {
+      existing.snapshot = snapshot;
+      existing.lastSeenAt = lastSeenAt;
+    }
+  });
+
+  const totals = Array.from(totalsByParticipant.values());
+  const rawLastWinner = input?.lastWinner;
+  const lastWinnerId = sanitizeStatsParticipantId(rawLastWinner?.participantId);
+  let lastWinner = null;
+
+  if (lastWinnerId) {
+    const fromTotals = totalsByParticipant.get(lastWinnerId);
+    const fallbackSnapshot = sanitizeStatsSnapshot(rawLastWinner, 0);
+    const snapshot = fromTotals?.snapshot || fallbackSnapshot;
+    lastWinner = {
+      participantId: lastWinnerId,
+      name: normalizeName(snapshot.name, 0),
+      emoji: sanitizeEmoji(snapshot.emoji, 0),
+      color: sanitizeColor(snapshot.color, 0),
+      wonAt: Math.max(0, Math.round(Number(rawLastWinner?.wonAt) || 0)),
+    };
+  }
+
+  let streak = null;
+  if (lastWinner) {
+    const rawStreak = input?.streak;
+    const streakId = sanitizeStatsParticipantId(rawStreak?.participantId);
+    const streakCount = Math.max(1, Math.round(Number(rawStreak?.count) || 1));
+    if (streakId && streakId === lastWinner.participantId) {
+      streak = {
+        participantId: streakId,
+        count: streakCount,
+      };
+    } else {
+      streak = {
+        participantId: lastWinner.participantId,
+        count: 1,
+      };
+    }
+  }
+
+  let bestStreak = null;
+  const rawBestStreak = input?.bestStreak;
+  const bestStreakId = sanitizeStatsParticipantId(rawBestStreak?.participantId);
+  const bestStreakCount = Math.max(1, Math.round(Number(rawBestStreak?.count) || 1));
+  if (bestStreakId) {
+    const fromTotals = totalsByParticipant.get(bestStreakId);
+    const fallbackSnapshot = sanitizeStatsSnapshot(rawBestStreak?.snapshot || rawBestStreak, 0);
+    const snapshot = fromTotals?.snapshot || fallbackSnapshot;
+    bestStreak = {
+      participantId: bestStreakId,
+      count: bestStreakCount,
+      snapshot,
+      achievedAt: Math.max(0, Math.round(Number(rawBestStreak?.achievedAt) || 0)),
+    };
+  }
+
+  if (streak && streak.count > 0) {
+    const streakSnapshot =
+      lastWinner && streak.participantId === lastWinner.participantId
+        ? {
+            name: lastWinner.name,
+            emoji: lastWinner.emoji,
+            color: lastWinner.color,
+          }
+        : totalsByParticipant.get(streak.participantId)?.snapshot || sanitizeStatsSnapshot({}, 0);
+    if (!bestStreak || streak.count > bestStreak.count) {
+      bestStreak = {
+        participantId: streak.participantId,
+        count: streak.count,
+        snapshot: sanitizeStatsSnapshot(streakSnapshot, 0),
+        achievedAt: lastWinner?.wonAt || 0,
+      };
+    }
+  }
+
+  return {
+    version: STATS_VERSION,
+    lastWinner,
+    streak,
+    bestStreak,
+    totals,
+  };
+}
+
+function loadStats() {
+  const stored = safeParse(safeLocalGet(STATS_STORAGE_KEY));
+  return sanitizeStats(stored);
+}
+
+function saveStats() {
+  const sanitized = sanitizeStats(stats);
+  stats = sanitized;
+  const payload = JSON.stringify({
+    version: STATS_VERSION,
+    lastWinner: sanitized.lastWinner
+      ? {
+          participantId: sanitized.lastWinner.participantId,
+          name: sanitized.lastWinner.name,
+          emoji: sanitized.lastWinner.emoji,
+          color: sanitized.lastWinner.color,
+          wonAt: sanitized.lastWinner.wonAt,
+        }
+      : null,
+    streak: sanitized.streak
+      ? {
+          participantId: sanitized.streak.participantId,
+          count: sanitized.streak.count,
+        }
+      : null,
+    bestStreak: sanitized.bestStreak
+      ? {
+          participantId: sanitized.bestStreak.participantId,
+          count: sanitized.bestStreak.count,
+          snapshot: {
+            name: sanitized.bestStreak.snapshot.name,
+            emoji: sanitized.bestStreak.snapshot.emoji,
+            color: sanitized.bestStreak.snapshot.color,
+          },
+          achievedAt: sanitized.bestStreak.achievedAt,
+        }
+      : null,
+    totals: sanitized.totals.map((entry) => ({
+      participantId: entry.participantId,
+      count: entry.count,
+      snapshot: {
+        name: entry.snapshot.name,
+        emoji: entry.snapshot.emoji,
+        color: entry.snapshot.color,
+      },
+      lastSeenAt: entry.lastSeenAt,
+    })),
+  });
+
+  try {
+    localStorage.setItem(STATS_STORAGE_KEY, payload);
+  } catch (_error) {
+    // Ignore quota errors to avoid interrupting the spin flow.
+  }
+}
+
+function recordWinner(winnerItem) {
+  const participantId = sanitizeStatsParticipantId(winnerItem?.id);
+  if (!participantId) {
+    return;
+  }
+  const winnerIndex = state.items.findIndex((item) => sanitizeStatsParticipantId(item?.id) === participantId);
+  const snapshot = sanitizeStatsSnapshot(winnerItem, winnerIndex >= 0 ? winnerIndex : 0);
+  const now = Date.now();
+  const totals = Array.isArray(stats?.totals) ? stats.totals.slice() : [];
+  const entryIndex = totals.findIndex((entry) => entry.participantId === participantId);
+
+  if (entryIndex >= 0) {
+    const currentCount = Math.max(0, Math.round(Number(totals[entryIndex].count) || 0));
+    totals[entryIndex] = {
+      participantId,
+      count: currentCount + 1,
+      snapshot,
+      lastSeenAt: now,
+    };
+  } else {
+    totals.push({
+      participantId,
+      count: 1,
+      snapshot,
+      lastSeenAt: now,
+    });
+  }
+
+  const previousStreakCount =
+    stats?.streak?.participantId === participantId ? Math.max(1, Math.round(Number(stats.streak.count) || 1)) : 0;
+  const nextStreakCount = previousStreakCount + 1;
+  const currentBestCount = Math.max(0, Math.round(Number(stats?.bestStreak?.count) || 0));
+  const shouldReplaceBest = nextStreakCount > currentBestCount;
+  const nextBestStreak = shouldReplaceBest
+    ? {
+        participantId,
+        count: nextStreakCount,
+        snapshot,
+        achievedAt: now,
+      }
+    : stats?.bestStreak
+      ? {
+          participantId: sanitizeStatsParticipantId(stats.bestStreak.participantId),
+          count: Math.max(1, Math.round(Number(stats.bestStreak.count) || 1)),
+          snapshot: sanitizeStatsSnapshot(stats.bestStreak.snapshot, 0),
+          achievedAt: Math.max(0, Math.round(Number(stats.bestStreak.achievedAt) || 0)),
+        }
+      : null;
+
+  stats = {
+    version: STATS_VERSION,
+    lastWinner: {
+      participantId,
+      name: snapshot.name,
+      emoji: snapshot.emoji,
+      color: snapshot.color,
+      wonAt: now,
+    },
+    streak: {
+      participantId,
+      count: nextStreakCount,
+    },
+    bestStreak: nextBestStreak,
+    totals,
+  };
+  saveStats();
+  renderStats();
+}
+
 function safeLocalGet(key) {
   try {
     return localStorage.getItem(key);
@@ -3165,8 +3786,11 @@ function safeParse(rawValue) {
 function setControlsDisabled(disabled) {
   refs.addItemButton.disabled = disabled;
   refs.resetButton.disabled = disabled;
-  refs.resetConfirmAccept.disabled = disabled;
   refs.resetConfirmCancel.disabled = disabled;
+  refs.statsPanelToggle.disabled = disabled;
+  refs.resetScopeConfig.disabled = disabled;
+  refs.resetScopeUsers.disabled = disabled;
+  refs.resetScopeHistory.disabled = disabled;
   refs.canvas.classList.toggle("spinning", disabled);
   if (disabled && !refs.colorModal.hidden) {
     closeColorModal();
@@ -3175,7 +3799,10 @@ function setControlsDisabled(disabled) {
     closeEmojiModal();
   }
   if (disabled && !refs.resetConfirmModal.hidden) {
-    closeResetConfirmModal();
+    closeResetConfirmModal(false);
+  }
+  if (disabled && !refs.statsModal.hidden) {
+    closeStatsModal(false);
   }
   refs.durationRangeMin.disabled = disabled;
   refs.durationRangeMax.disabled = disabled;
@@ -3187,6 +3814,7 @@ function setControlsDisabled(disabled) {
   refs.fontSizeRange.disabled = disabled;
   refs.fontFamilySelect.disabled = disabled;
   refs.winAnimationSelect.disabled = disabled;
+  updateResetConfirmAcceptState();
   renderItemList();
 }
 

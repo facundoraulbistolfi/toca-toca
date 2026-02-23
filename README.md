@@ -1,79 +1,93 @@
 # Toca Toca
 
-App web estilo casino para decidir a quien le toca, con una rula totalmente configurable y lista para GitHub Pages.
+App web estilo casino para decidir a quien le toca, con una ruleta totalmente configurable, estadisticas persistentes y lista para GitHub Pages.
 
-## Version
+[![Version](https://img.shields.io/badge/version-v1.0.0-0a7f5a.svg)](./changelog.md)
+[![Estado](https://img.shields.io/badge/estado-productiva-1f8f5f.svg)](./changelog.md)
+[![Stack](https://img.shields.io/badge/stack-HTML%20%7C%20CSS%20%7C%20JS-informational.svg)](#tecnologias-usadas)
 
-- Version actual: `v0.0.1`
+## Version actual
 
-## Funcionalidades principales
+`v1.0.0` - primera version productiva.
 
-- Giro realista de la rula con desaceleracion suave.
-- Giro al click/tap sobre la rula y opcion de frenarla con otro click.
-- Duracion aleatoria configurable por rango (`1` a `60` segundos).
-- Personalizacion de texto en la rula:
-  - disposicion (`radial`, `tangencial`, `horizontal`)
-  - posicion del texto en la seccion
-  - tamano de fuente
-  - familia tipografica estilo casino
+## Autor y creditos
+
+- Creado por [Facundo Bistolfi](https://github.com/facundoraulbistolfi).
+- Desarrollado en colaboracion con [Codex (OpenAI)](https://openai.com/codex).
+
+## Tecnologias usadas
+
+| Area | Tecnologia |
+| --- | --- |
+| Frontend | HTML5 + CSS3 + JavaScript (Vanilla) |
+| Render ruleta | Canvas 2D API |
+| Audio | Web Audio API |
+| Persistencia config | Cookie (`tocaTocaConfig`) + `localStorage` fallback (`tocaTocaConfigFallback`) |
+| Persistencia stats | `localStorage` (`tocaTocaSpinStats`) |
+| Emojis | Unicode/CLDR catalog local (`emoji-catalog.js`) |
+| Deploy | GitHub Pages + GitHub Actions |
+
+## Lo que incluye v1.0.0
+
+- Giro realista con desaceleracion y opcion de frenado por click.
+- Duracion aleatoria configurable (`1` a `60` segundos).
+- Personalizacion completa de ruleta:
+  - disposicion de texto (`radial`, `tangencial`, `horizontal`)
+  - posicion de texto, tamano y familia tipografica
   - modo de emoji en nombre (`inicio`, `final`, `ambos`, `ninguno`)
-- Configuracion por participante:
-  - nombre (maximo `10` caracteres)
-  - emoji (selector modal + busqueda + random)
-  - color (modal con paletas, RGB, hex y random)
-  - porcentaje de la seccion
-  - animacion de ganador por participante (o usar animacion general)
-  - visibilidad en rula (`👁`/`🙈`) sin borrar de la lista
-- Reglas de visibilidad:
-  - participantes ocultos no entran en el giro ni pueden ganar
-  - si estan ocultos, su porcentaje queda bloqueado
+- Gestion avanzada de participantes:
+  - nombre, emoji, color, porcentaje y animacion por participante
+  - ocultar/mostrar sin borrar (`👁` / `🙈`)
   - se mantiene minimo de `2` participantes visibles
+- Seccion de estadisticas (modal independiente):
+  - ultimo en salir + estado de racha
+  - racha mas larga
+  - tabla acumulada por jugador
+  - historial persistente entre sesiones
+- Reset selectivo con scopes combinables:
+  - configuracion
+  - usuarios
+  - historial
+  - el reset de configuracion no modifica volumen
 - Efectos visuales y sonoros:
-  - luces neon en el borde de la rula (standby/spin/winner)
-  - audio de pulso en puntero y aplausos al ganar
-  - multiples animaciones de victoria (incluye modo aleatorio)
-- Persistencia local por navegador:
-  - cookie principal `tocaTocaConfig`
-  - fallback en `localStorage`
+  - luces en aro (standby/spin/winner)
+  - audio de puntero y celebracion
+  - multiples animaciones de victoria
 
-## Estructura
+## Estructura del repo
 
-- `index.html`: estructura principal y modales
-- `styles.css`: tema visual, layout responsive y estilos de componentes
-- `app.js`: logica de giro, configuracion, persistencia y animaciones
-- `emoji-catalog.js`: catalogo oficial local (Unicode/CLDR) con nombres ES/EN y aliases de busqueda
-- `scripts/generate-emoji-catalog.mjs`: generador del catalogo a partir de fuentes oficiales
-- `favicon.svg`: icono de pestaña
-- `changelog.md`: historial de cambios
+- `index.html`: estructura principal, panel lateral y modales
+- `styles.css`: tema visual, layout responsive y componentes
+- `app.js`: logica de ruleta, estado, persistencia, estadisticas y animaciones
+- `emoji-catalog.js`: catalogo local de emojis (Unicode/CLDR)
+- `scripts/generate-emoji-catalog.mjs`: script de regeneracion del catalogo
+- `favicon.svg`: icono del sitio
+- `changelog.md`: historial de versiones
 
-## Regenerar catalogo de emojis
-
-Para actualizar el catalogo local:
-
-```bash
-node scripts/generate-emoji-catalog.mjs
-```
-
-## Ejecucion local
+## Ejecutar en local
 
 No requiere build ni dependencias.
 
 1. Abrir `index.html` directamente en el navegador.
-2. O levantar un servidor estatico:
+2. O levantar servidor estatico:
 
 ```bash
 python3 -m http.server 8080
 ```
 
-Luego abrir `http://localhost:8080`.
+Abrir `http://localhost:8080`.
+
+## Regenerar catalogo de emojis
+
+```bash
+node scripts/generate-emoji-catalog.mjs
+```
 
 ## Despliegue en GitHub Pages
 
-1. Asegurar que exista el workflow `.github/workflows/deploy-pages.yml`.
-2. Hacer push de tus cambios a la rama `main`.
-3. Ir a `Settings > Pages` en GitHub.
-4. En `Build and deployment`, seleccionar:
-   - `Source: GitHub Actions`
-5. Guardar.
+1. Verificar workflow `.github/workflows/deploy-pages.yml`.
+2. Hacer push de cambios a la rama de despliegue.
+3. En GitHub: `Settings > Pages`.
+4. En `Build and deployment`, seleccionar `Source: GitHub Actions`.
 
-En cada push a `main`, GitHub Actions publicara automaticamente el sitio.
+Con cada push, GitHub Actions publica automaticamente el sitio.

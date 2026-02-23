@@ -36,6 +36,17 @@
       🔊
     </button>
     <button
+      id="statsPanelToggle"
+      class="stats-panel-toggle"
+      type="button"
+      aria-controls="statsModal"
+      aria-expanded="false"
+      aria-label="Abrir estadisticas"
+      title="Abrir estadisticas"
+    >
+      📊
+    </button>
+    <button
       id="infoPanelToggle"
       class="info-panel-toggle"
       type="button"
@@ -370,7 +381,7 @@
         <section class="info-block">
           <h4>Toca Toca</h4>
           <p>Rula de nombres personalizable.</p>
-          <p><strong>Version actual:</strong> v0.0.1</p>
+          <p><strong>Version actual:</strong> v1.0.0</p>
           <p>
             Creado por
             <a href="https://github.com/facundoraulbistolfi" target="_blank" rel="noopener noreferrer">Facundo Bistolfi</a>
@@ -395,8 +406,61 @@
         <section class="info-block">
           <h4>Changelog</h4>
           <ul class="changelog-list">
-            <li><strong>v0.0.1</strong> - MVP funcional inicial publicado para iterar la rula.</li>
+            <li><strong>v1.0.0</strong> - Primera version productiva.</li>
           </ul>
+        </section>
+      </section>
+    </div>
+    <div id="statsModal" class="color-modal stats-modal" hidden>
+      <div class="color-modal-backdrop" data-close-stats-modal></div>
+      <section class="color-modal-content stats-modal-content" role="dialog" aria-modal="true" aria-labelledby="statsModalTitle">
+        <header class="color-modal-header">
+          <h3 id="statsModalTitle">Estadisticas</h3>
+          <button
+            id="statsModalClose"
+            class="color-modal-close"
+            type="button"
+            aria-label="Cerrar estadisticas"
+            title="Cerrar estadisticas"
+          >
+            ✕
+          </button>
+        </header>
+        <div class="stats-summary-grid">
+          <section class="stats-summary-card">
+            <h4>Ultimo en salir</h4>
+            <div id="statsLastWinner" class="stats-last-winner-slot">
+              <div class="stats-player-chip stats-player-chip-empty">
+                <span class="stats-player-emoji" aria-hidden="true">🕳️</span>
+                <span class="stats-player-name">Sin datos</span>
+              </div>
+            </div>
+            <p id="statsLastWinnerStatus" class="stats-last-winner-status">Sin historial de salidas.</p>
+          </section>
+          <section class="stats-summary-card">
+            <h4>Racha mas larga</h4>
+            <div id="statsLongestStreak" class="stats-streak-slot">
+              <p class="stats-streak">Sin rachas registradas.</p>
+            </div>
+          </section>
+        </div>
+        <section class="stats-table-section">
+          <header class="stats-table-header">
+            <h4>Acumulado por jugador</h4>
+          </header>
+          <p id="statsEmptyState" class="stats-empty-state">Todavia no hay historial de salidas.</p>
+          <div id="statsTableWrap" class="stats-table-wrap" hidden>
+            <table class="stats-table">
+              <thead>
+                <tr>
+                  <th scope="col">#</th>
+                  <th scope="col">Jugador</th>
+                  <th scope="col">Veces</th>
+                </tr>
+              </thead>
+              <tbody id="statsTableBody"></tbody>
+            </table>
+          </div>
         </section>
       </section>
     </div>
@@ -416,8 +480,23 @@
           </button>
         </header>
         <p class="reset-confirm-text">
-          Se va a perder la configuracion actual de participantes, colores, emojis, porcentajes y ajustes de giro.
+          Elegi que queres restablecer.
         </p>
+        <fieldset class="reset-scope-fieldset">
+          <legend>Opciones</legend>
+          <label class="reset-scope-option" for="resetScopeConfig">
+            <input id="resetScopeConfig" type="checkbox" checked />
+            <span>Configuracion</span>
+          </label>
+          <label class="reset-scope-option" for="resetScopeUsers">
+            <input id="resetScopeUsers" type="checkbox" checked />
+            <span>Usuarios</span>
+          </label>
+          <label class="reset-scope-option" for="resetScopeHistory">
+            <input id="resetScopeHistory" type="checkbox" checked />
+            <span>Historial</span>
+          </label>
+        </fieldset>
         <p class="reset-confirm-text">
           Esta accion no se puede deshacer.
         </p>
