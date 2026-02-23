@@ -1,0 +1,48 @@
+name: "Reporte de bug"
+description: "Informar un error en Toca Toca."
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: textarea
+    id: descripcion
+    attributes:
+      label: Descripcion del problema
+      description: Conta que esta fallando.
+      placeholder: Al girar la ruleta, el resultado se congela...
+    validations:
+      required: true
+  - type: textarea
+    id: pasos
+    attributes:
+      label: Pasos para reproducir
+      description: Indica una secuencia corta para repetir el problema.
+      placeholder: |
+        1. Abrir la app
+        2. Configurar X
+        3. Hacer clic en Y
+        4. Ver error
+    validations:
+      required: true
+  - type: textarea
+    id: esperado
+    attributes:
+      label: Resultado esperado (opcional)
+      description: Que esperabas que pasara?
+    validations:
+      required: false
+  - type: input
+    id: version
+    attributes:
+      label: Version visible en la app (opcional)
+      description: Ejemplo: v1.0.0
+      placeholder: v1.0.0
+    validations:
+      required: false
+  - type: checkboxes
+    id: privacidad
+    attributes:
+      label: Confirmacion de privacidad
+      options:
+        - label: Entiendo que este issue es publico y no incluye datos personales o sensibles.
+          required: true

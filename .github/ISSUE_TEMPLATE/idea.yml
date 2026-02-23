@@ -1,0 +1,36 @@
+name: "Propuesta de mejora"
+description: "Sugerir una idea o funcionalidad para Toca Toca."
+title: "[Idea]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: propuesta
+    attributes:
+      label: Propuesta
+      description: Explica la mejora que te gustaria ver.
+      placeholder: Me gustaria sumar...
+    validations:
+      required: true
+  - type: textarea
+    id: beneficio
+    attributes:
+      label: Beneficio esperado
+      description: Que problema resuelve o que valor aporta?
+      placeholder: Esto ayudaria a...
+    validations:
+      required: true
+  - type: textarea
+    id: contexto
+    attributes:
+      label: Contexto adicional (opcional)
+      description: Ejemplos, capturas o detalles extra.
+    validations:
+      required: false
+  - type: checkboxes
+    id: privacidad
+    attributes:
+      label: Confirmacion de privacidad
+      options:
+        - label: Entiendo que este issue es publico y no incluye datos personales o sensibles.
+          required: true

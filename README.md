@@ -15,6 +15,15 @@ App web estilo casino para decidir a quien le toca, con una ruleta totalmente co
 - Creado por [Facundo Bistolfi](https://github.com/facundoraulbistolfi).
 - Desarrollado en colaboracion con [Codex (OpenAI)](https://openai.com/codex).
 
+## Contacto
+
+Canal oficial de contacto: **GitHub Issues publicos**.
+
+- Reportar bug: [abrir issue de bug](https://github.com/facundoraulbistolfi/toca-toca/issues/new?template=bug-report.yml)
+- Proponer idea: [abrir issue de mejora](https://github.com/facundoraulbistolfi/toca-toca/issues/new?template=idea.yml)
+
+No compartas datos personales o sensibles en los issues.
+
 ## Tecnologias usadas
 
 | Area | Tecnologia |
