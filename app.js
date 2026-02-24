@@ -1,11 +1,15 @@
 const CONFIG_VERSION = 1;
-const STATS_VERSION = 2;
+const STATS_VERSION = 3;
+const SPIN_HISTORY_VERSION = 1;
 const COOKIE_KEY = "tocaTocaConfig";
 const STORAGE_KEY = "tocaTocaConfigFallback";
 const STATS_STORAGE_KEY = "tocaTocaSpinStats";
+const SPIN_HISTORY_STORAGE_KEY = "tocaTocaSpinHistory";
 const CHANGELOG_FILE_PATH = "changelog.md";
-const DEFAULT_SPIN_DURATION_MIN = 5;
-const DEFAULT_SPIN_DURATION_MAX = 8;
+const EMOJI_CATALOG_SCRIPT_PATH = "emoji-catalog.js";
+const stateStoreApi = globalThis?.TocaTocaStateStore || createFallbackStateStoreApi();
+const DEFAULT_SPIN_DURATION_MIN = 20;
+const DEFAULT_SPIN_DURATION_MAX = 40;
 const MIN_SPIN_DURATION = 1;
 const MAX_SPIN_DURATION = 60;
 const DEFAULT_TEXT_LAYOUT = "radial";
@@ -73,7 +77,7 @@ const FONT_OPTION_MAP = new Map(FONT_OPTIONS.map((option) => [option.id, option]
 const DEFAULT_WINNER_ANIMATION_MODE = "emojiRain";
 const WINNER_ANIMATION_OPTIONS = [
   { id: "random", emoji: "🎲", label: "Aleatorio" },
-  { id: "emojiRain", emoji: "🌧️", label: "Lluvia de emojis (clasica)" },
+  { id: "emojiRain", emoji: "🌧️", label: "Lluvia de emojis (clásica)" },
   { id: "emojiRainExtreme", emoji: "🌊", label: "Lluvia de emojis (extrema)" },
   { id: "emojiHose", emoji: "🚿", label: "Manguera de emojis" },
   { id: "fuegosArtificiales", emoji: "🎆", label: "Fuegos artificiales" },
@@ -82,7 +86,7 @@ const WINNER_ANIMATION_OPTIONS = [
   { id: "emojiBounce", emoji: "🪀", label: "Rebote emoji" },
   { id: "confeti", emoji: "🎉", label: "Confeti" },
   { id: "estrellas", emoji: "✨", label: "Estrellas" },
-  { id: "neonPulse", emoji: "⚡", label: "Pulso neon" },
+  { id: "neonPulse", emoji: "⚡", label: "Pulso neón" },
 ];
 const WINNER_ANIMATION_MODE_VALUES = new Set(WINNER_ANIMATION_OPTIONS.map((option) => option.id));
 const WINNER_ANIMATION_RANDOM_POOL = WINNER_ANIMATION_OPTIONS
@@ -101,18 +105,22 @@ const MIN_RETRY_SLICE_PCT = 1;
 const MAX_RETRY_SLICE_PCT = 70;
 const DEFAULT_RETRY_SLICE_COLOR = "#6A1E2A";
 const DEFAULT_SOUND_MUTED = false;
+const DEFAULT_REDUCE_MOTION = false;
+const DEFAULT_ROUND_MODE = "normal";
+const ROUND_MODE_VALUES = new Set(["normal", "cycle_no_repeat", "elimination"]);
+const MAX_HISTORY_ENTRIES = 500;
+const MAX_RECENT_STATS_ROWS = 10;
+const DEFAULT_VISIBLE_TOTALS_ROWS = 5;
 const ARGENTINA_EASTER_EGG_EMOJI_POOL = ["🧉", "🇦🇷", "⚽", "⭐", "🌟", "🏆", "🩵", "🤍", "☀️"];
 const ARGENTINA_EASTER_EGG_FEATURED_EMOJIS = ["🇦🇷", "🧉", "⚽", "⭐", "🌟", "🏆"];
 const ARGENTINA_EASTER_EGG_FOCUS_EMOJIS = ["🧉", "🇦🇷", "🧉", "🇦🇷", "🧉", "🇦🇷", "⚽", "⭐"];
 const PARTICIPANT_ANIMATION_OPTIONS = [
   { id: "general", emoji: "🌐", label: "General (usar ajuste global)" },
-  ...WINNER_ANIMATION_OPTIONS
-    .filter((option) => option.id !== "random")
-    .map((option) => ({
-      id: option.id,
-      emoji: option.emoji,
-      label: option.label,
-    })),
+  ...WINNER_ANIMATION_OPTIONS.map((option) => ({
+    id: option.id,
+    emoji: option.emoji,
+    label: option.label,
+  })),
 ];
 const PARTICIPANT_ANIMATION_MODE_VALUES = new Set(
   PARTICIPANT_ANIMATION_OPTIONS.map((option) => option.id),
@@ -153,10 +161,10 @@ const BG_RAIN_MIN_DELAY_MS = 180;
 const BG_RAIN_MAX_DELAY_MS = 340;
 const BG_RAIN_MAX_ACTIVE_DROPS = 64;
 const DEFAULT_EMOJIS = ["😀", "😎", "🤖", "🔥", "🍀", "🚀", "🎯", "⭐", "⚡", "🌈"];
-const EMOJI_CATALOG = loadEmojiCatalog();
-const EMOJI_SECTIONS = buildEmojiSections(EMOJI_CATALOG);
-const EMOJI_OPTIONS = EMOJI_SECTIONS.flatMap((section) => section.items);
-const EMOJI_NAME_INDEX = buildEmojiNameIndex(EMOJI_SECTIONS, EMOJI_CATALOG);
+let EMOJI_CATALOG = null;
+let EMOJI_SECTIONS = buildEmojiSections(null);
+let EMOJI_OPTIONS = EMOJI_SECTIONS.flatMap((section) => section.items);
+let EMOJI_NAME_INDEX = buildEmojiNameIndex(EMOJI_SECTIONS, null);
 const COLOR_PALETTES = buildColorPalettes();
 const DEFAULT_COLOR_PALETTE_ID = COLOR_PALETTES[0]?.id || "vibrante";
 const COLOR_PALETTE_MAP = new Map(COLOR_PALETTES.map((palette) => [palette.id, palette]));
@@ -191,17 +199,21 @@ const CARD_SUITS = [
   { symbol: "♦", red: true },
   { symbol: "♣", red: false },
 ];
-const WINNER_EFFECT_PROFILE = buildWinnerEffectProfile();
+let winnerEffectProfile = null;
 
 const refs = {
   wheelCard: document.querySelector(".wheel-card"),
   hero: document.querySelector(".hero"),
   configPanelToggle: document.getElementById("configPanelToggle"),
   soundToggle: document.getElementById("soundToggle"),
+  participantsPanelToggle: document.getElementById("participantsPanelToggle"),
   statsPanelToggle: document.getElementById("statsPanelToggle"),
   infoPanelToggle: document.getElementById("infoPanelToggle"),
   configPanelClose: document.getElementById("configPanelClose"),
   configPanel: document.getElementById("configPanel"),
+  participantsPanelClose: document.getElementById("participantsPanelClose"),
+  participantsPanel: document.getElementById("participantsPanel"),
+  configBody: document.querySelector(".config-body"),
   configBackdrop: document.getElementById("configBackdrop"),
   bgEmojiRain: document.getElementById("bgEmojiRain"),
   canvas: document.getElementById("wheelCanvas"),
@@ -220,11 +232,39 @@ const refs = {
   textPositionRange: document.getElementById("textPositionRange"),
   fontSizeLabel: document.getElementById("fontSizeLabel"),
   fontSizeRange: document.getElementById("fontSizeRange"),
+  autoTextTuneButton: document.getElementById("autoTextTuneButton"),
+  fontPicker: document.getElementById("fontPicker"),
+  fontPickerSummary: document.getElementById("fontPickerSummary"),
+  fontPickerOptions: document.getElementById("fontPickerOptions"),
   fontFamilySelect: document.getElementById("fontFamilySelect"),
   winAnimationSelect: document.getElementById("winAnimationSelect"),
+  reduceMotionToggle: document.getElementById("reduceMotionToggle"),
   itemList: document.getElementById("itemList"),
+  bulkParticipantsInput: document.getElementById("bulkParticipantsInput"),
+  bulkAddButton: document.getElementById("bulkAddButton"),
+  bulkParticipantsModal: document.getElementById("bulkParticipantsModal"),
+  bulkParticipantsClose: document.getElementById("bulkParticipantsClose"),
+  bulkParticipantsCancel: document.getElementById("bulkParticipantsCancel"),
+  bulkParticipantsConfirm: document.getElementById("bulkParticipantsConfirm"),
+  bulkModeAppend: document.getElementById("bulkModeAppend"),
+  bulkModeReplace: document.getElementById("bulkModeReplace"),
   addItemButton: document.getElementById("addItemButton"),
   equalizePercentagesButton: document.getElementById("equalizePercentagesButton"),
+  exportConfigButton: document.getElementById("exportConfigButton"),
+  importConfigButton: document.getElementById("importConfigButton"),
+  importConfigInput: document.getElementById("importConfigInput"),
+  exportOptionsModal: document.getElementById("exportOptionsModal"),
+  exportOptionsClose: document.getElementById("exportOptionsClose"),
+  exportOptionsCancel: document.getElementById("exportOptionsCancel"),
+  exportOptionsConfirm: document.getElementById("exportOptionsConfirm"),
+  exportIncludeConfig: document.getElementById("exportIncludeConfig"),
+  exportIncludeStats: document.getElementById("exportIncludeStats"),
+  importOptionsModal: document.getElementById("importOptionsModal"),
+  importOptionsClose: document.getElementById("importOptionsClose"),
+  importOptionsCancel: document.getElementById("importOptionsCancel"),
+  importOptionsConfirm: document.getElementById("importOptionsConfirm"),
+  importIncludeConfig: document.getElementById("importIncludeConfig"),
+  importIncludeStats: document.getElementById("importIncludeStats"),
   resetButton: document.getElementById("resetButton"),
   formMessage: document.getElementById("formMessage"),
   colorModal: document.getElementById("colorModal"),
@@ -253,6 +293,7 @@ const refs = {
   emojiSections: document.getElementById("emojiSections"),
   infoModal: document.getElementById("infoModal"),
   infoVersionText: document.getElementById("infoVersionText"),
+  infoChangelogDetails: document.getElementById("infoChangelogDetails"),
   changelogList: document.getElementById("changelogList"),
   infoModalClose: document.getElementById("infoModalClose"),
   argentinaFlagButton: document.getElementById("argentinaFlagButton"),
@@ -271,6 +312,11 @@ const refs = {
   statsTableBody: document.getElementById("statsTableBody"),
   statsTableWrap: document.getElementById("statsTableWrap"),
   statsEmptyState: document.getElementById("statsEmptyState"),
+  statsTotalsToggle: document.getElementById("statsTotalsToggle"),
+  statsRecentDetails: document.getElementById("statsRecentDetails"),
+  statsRecentBody: document.getElementById("statsRecentBody"),
+  statsRecentWrap: document.getElementById("statsRecentWrap"),
+  statsRecentEmptyState: document.getElementById("statsRecentEmptyState"),
 };
 
 const ctx = refs.canvas?.getContext("2d");
@@ -279,7 +325,10 @@ if (!ctx) {
 }
 
 let state = loadState();
+let statsStore = loadStatsStore();
 let stats = loadStats();
+let spinHistory = loadSpinHistory();
+winnerEffectProfile = buildWinnerEffectProfile();
 let currentRotationDeg = 0;
 let isSpinning = false;
 let celebrationTimeoutId = null;
@@ -305,6 +354,13 @@ let trackedCursorX = Number.NaN;
 let trackedCursorY = Number.NaN;
 let audioWarmupDone = false;
 let changelogLoadPromise = null;
+let emojiCatalogLoadPromise = null;
+let floatingTooltipEl = null;
+let floatingTooltipTarget = null;
+const hiddenParticipantPctById = new Map();
+let importIncludeConfigOnNextFile = true;
+let importIncludeStatsOnNextFile = true;
+let statsTotalsExpanded = false;
 
 init();
 
@@ -314,12 +370,15 @@ function init() {
   initColorModal();
   initEmojiModal();
   bindEvents();
+  initFloatingTooltip();
   bindAudioUnlockEvents();
   document.body.classList.remove("theme-light");
+  updateReducedMotionClass();
   render();
   setRimLightMode(RIM_LIGHT_MODE.STANDBY);
   startBackgroundEmojiRain();
   closeConfigPanel(false);
+  closeParticipantsPanel(false);
 }
 
 function bindEvents() {
@@ -329,11 +388,16 @@ function bindEvents() {
   refs.equalizePercentagesButton.addEventListener("click", equalizeParticipantPercentages);
   refs.resetButton.addEventListener("click", openResetConfirmModal);
   refs.configPanelToggle.addEventListener("click", toggleConfigPanel);
+  refs.participantsPanelToggle.addEventListener("click", toggleParticipantsPanel);
   refs.soundToggle.addEventListener("click", () => setSoundMuted(!state.soundMuted));
   refs.statsPanelToggle.addEventListener("click", openStatsModal);
   refs.infoPanelToggle.addEventListener("click", openInfoModal);
   refs.configPanelClose.addEventListener("click", () => closeConfigPanel(true));
-  refs.configBackdrop.addEventListener("click", () => closeConfigPanel(true));
+  refs.participantsPanelClose.addEventListener("click", () => closeParticipantsPanel(true));
+  refs.configBackdrop.addEventListener("click", () => {
+    closeConfigPanel(false);
+    closeParticipantsPanel(false);
+  });
 
   refs.durationRangeMin.addEventListener("input", () => {
     setSpinDurationMin(refs.durationRangeMin.value);
@@ -379,12 +443,33 @@ function bindEvents() {
   refs.fontSizeRange.addEventListener("input", () => {
     setFontSize(refs.fontSizeRange.value);
   });
+  refs.autoTextTuneButton.addEventListener("click", applyAutoTextTuning);
   refs.fontFamilySelect.addEventListener("change", () => {
     setFontFamily(refs.fontFamilySelect.value);
   });
+  if (refs.fontPicker instanceof HTMLDetailsElement && refs.fontPickerSummary instanceof HTMLElement) {
+    refs.fontPickerSummary.addEventListener("click", (event) => {
+      if (!isSpinning) {
+        return;
+      }
+      event.preventDefault();
+    });
+    refs.fontPicker.addEventListener("toggle", () => {
+      if (isSpinning && refs.fontPicker.open) {
+        refs.fontPicker.open = false;
+      }
+    });
+  }
   refs.winAnimationSelect.addEventListener("change", () => {
     setWinnerAnimationMode(refs.winAnimationSelect.value);
   });
+  refs.reduceMotionToggle.addEventListener("change", () => {
+    setReduceMotion(refs.reduceMotionToggle.checked);
+  });
+  refs.bulkAddButton.addEventListener("click", openBulkParticipantsModal);
+  refs.exportConfigButton.addEventListener("click", openExportOptionsModal);
+  refs.importConfigButton.addEventListener("click", openImportOptionsModal);
+  refs.importConfigInput.addEventListener("change", importConfigFromFile);
 
   refs.colorModal.addEventListener("click", (event) => {
     if (event.target instanceof HTMLElement && event.target.hasAttribute("data-close-color-modal")) {
@@ -438,6 +523,9 @@ function bindEvents() {
   refs.emojiSearchInput.addEventListener("input", () => {
     renderEmojiSections(refs.emojiSearchInput.value);
   });
+  refs.emojiSearchInput.addEventListener("focus", () => {
+    void ensureEmojiCatalogLoaded();
+  });
   refs.emojiNativeInput.addEventListener("input", () => {
     const normalized = sanitizeEmoji(refs.emojiNativeInput.value, activeEmojiIndex ?? 0);
     refs.emojiNativeInput.value = normalized;
@@ -461,6 +549,7 @@ function bindEvents() {
     }
   });
   refs.statsModalClose.addEventListener("click", closeStatsModal);
+  refs.statsTotalsToggle.addEventListener("click", toggleStatsTotalsExpanded);
   if (refs.argentinaFlagButton instanceof HTMLElement) {
     refs.argentinaFlagButton.addEventListener("click", triggerInfoEasterEgg);
   }
@@ -469,9 +558,33 @@ function bindEvents() {
       closeResetConfirmModal();
     }
   });
+  refs.bulkParticipantsModal.addEventListener("click", (event) => {
+    if (event.target instanceof HTMLElement && event.target.hasAttribute("data-close-bulk-modal")) {
+      closeBulkParticipantsModal();
+    }
+  });
+  refs.exportOptionsModal.addEventListener("click", (event) => {
+    if (event.target instanceof HTMLElement && event.target.hasAttribute("data-close-export-modal")) {
+      closeExportOptionsModal();
+    }
+  });
+  refs.importOptionsModal.addEventListener("click", (event) => {
+    if (event.target instanceof HTMLElement && event.target.hasAttribute("data-close-import-modal")) {
+      closeImportOptionsModal();
+    }
+  });
   refs.resetConfirmClose.addEventListener("click", closeResetConfirmModal);
   refs.resetConfirmCancel.addEventListener("click", closeResetConfirmModal);
   refs.resetConfirmAccept.addEventListener("click", confirmResetState);
+  refs.bulkParticipantsClose.addEventListener("click", closeBulkParticipantsModal);
+  refs.bulkParticipantsCancel.addEventListener("click", closeBulkParticipantsModal);
+  refs.bulkParticipantsConfirm.addEventListener("click", confirmBulkParticipantsModal);
+  refs.exportOptionsClose.addEventListener("click", closeExportOptionsModal);
+  refs.exportOptionsCancel.addEventListener("click", closeExportOptionsModal);
+  refs.exportOptionsConfirm.addEventListener("click", confirmExportOptionsModal);
+  refs.importOptionsClose.addEventListener("click", closeImportOptionsModal);
+  refs.importOptionsCancel.addEventListener("click", closeImportOptionsModal);
+  refs.importOptionsConfirm.addEventListener("click", confirmImportOptionsModal);
   refs.resetScopeConfig.addEventListener("change", updateResetConfirmAcceptState);
   refs.resetScopeUsers.addEventListener("change", updateResetConfirmAcceptState);
   refs.resetScopeHistory.addEventListener("change", updateResetConfirmAcceptState);
@@ -498,12 +611,59 @@ function bindEvents() {
       closeResetConfirmModal();
       return;
     }
+    if (event.key === "Escape" && !refs.bulkParticipantsModal.hidden) {
+      closeBulkParticipantsModal();
+      return;
+    }
+    if (event.key === "Escape" && !refs.exportOptionsModal.hidden) {
+      closeExportOptionsModal();
+      return;
+    }
+    if (event.key === "Escape" && !refs.importOptionsModal.hidden) {
+      closeImportOptionsModal();
+      return;
+    }
     if (event.key === "Escape" && !refs.statsModal.hidden) {
       closeStatsModal();
       return;
     }
+    if (event.key === "Escape" && refs.participantsPanel.classList.contains("is-open")) {
+      closeParticipantsPanel(true);
+      return;
+    }
     if (event.key === "Escape") {
       closeConfigPanel(true);
+      return;
+    }
+    if (isEditableTarget(event.target)) {
+      return;
+    }
+    if (event.repeat) {
+      return;
+    }
+    const key = String(event.key || "").toLowerCase();
+    if (key === "m") {
+      event.preventDefault();
+      setSoundMuted(!state.soundMuted);
+      return;
+    }
+    if (key === "c") {
+      event.preventDefault();
+      toggleConfigPanel();
+      return;
+    }
+    if (key === "s") {
+      event.preventDefault();
+      if (refs.statsModal.hidden) {
+        openStatsModal();
+      } else {
+        closeStatsModal();
+      }
+      return;
+    }
+    if (key === " " || key === "enter") {
+      event.preventDefault();
+      spinWheel();
     }
   });
 }
@@ -533,10 +693,7 @@ function buildWinnerEffectProfile() {
   const nav = typeof navigator !== "undefined" ? navigator : {};
   const hardware = Number(nav.hardwareConcurrency) || 0;
   const memory = Number(nav.deviceMemory) || 0;
-  const reducedMotion =
-    typeof window !== "undefined" &&
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reducedMotion = shouldReduceMotion();
 
   let scale = 0.92;
   if (reducedMotion) {
@@ -603,32 +760,196 @@ function toggleConfigPanel() {
 }
 
 function openConfigPanel() {
+  closeParticipantsPanel(false);
   refs.configPanel.classList.add("is-open");
   refs.configPanel.setAttribute("aria-hidden", "false");
-  refs.configBackdrop.hidden = false;
   refs.configPanelToggle.setAttribute("aria-expanded", "true");
-  document.body.classList.add("panel-open");
+  syncSidePanelBackdrop();
 }
 
 function closeConfigPanel(restoreFocus) {
   refs.configPanel.classList.remove("is-open");
   refs.configPanel.setAttribute("aria-hidden", "true");
-  refs.configBackdrop.hidden = true;
   refs.configPanelToggle.setAttribute("aria-expanded", "false");
-  document.body.classList.remove("panel-open");
+  syncSidePanelBackdrop();
+  hideFloatingTooltip();
   if (restoreFocus) {
     refs.configPanelToggle.focus();
   }
 }
 
+function toggleParticipantsPanel() {
+  const isOpen = refs.participantsPanel.classList.contains("is-open");
+  if (isOpen) {
+    closeParticipantsPanel(true);
+    return;
+  }
+  openParticipantsPanel();
+}
+
+function openParticipantsPanel() {
+  closeConfigPanel(false);
+  refs.participantsPanel.classList.add("is-open");
+  refs.participantsPanel.setAttribute("aria-hidden", "false");
+  refs.participantsPanelToggle.setAttribute("aria-expanded", "true");
+  syncSidePanelBackdrop();
+}
+
+function closeParticipantsPanel(restoreFocus) {
+  refs.participantsPanel.classList.remove("is-open");
+  refs.participantsPanel.setAttribute("aria-hidden", "true");
+  refs.participantsPanelToggle.setAttribute("aria-expanded", "false");
+  syncSidePanelBackdrop();
+  hideFloatingTooltip();
+  if (restoreFocus) {
+    refs.participantsPanelToggle.focus();
+  }
+}
+
+function syncSidePanelBackdrop() {
+  const hasAnyOpen =
+    refs.configPanel.classList.contains("is-open") || refs.participantsPanel.classList.contains("is-open");
+  refs.configBackdrop.hidden = !hasAnyOpen;
+  document.body.classList.toggle("panel-open", hasAnyOpen);
+}
+
+function initFloatingTooltip() {
+  if (!(document.body instanceof HTMLElement)) {
+    return;
+  }
+  const targets = Array.from(document.querySelectorAll("[data-tooltip]")).filter(
+    (target) => target instanceof HTMLElement,
+  );
+  if (targets.length === 0) {
+    return;
+  }
+  const tooltip = document.createElement("div");
+  tooltip.className = "floating-tooltip";
+  tooltip.hidden = true;
+  tooltip.setAttribute("role", "tooltip");
+  document.body.append(tooltip);
+  floatingTooltipEl = tooltip;
+  document.body.classList.add("js-tooltip");
+
+  targets.forEach((target) => {
+    target.removeAttribute("title");
+    target.addEventListener("pointerenter", () => {
+      showFloatingTooltip(target);
+    });
+    target.addEventListener("pointerleave", () => {
+      hideFloatingTooltip(target);
+    });
+    target.addEventListener("focus", () => {
+      showFloatingTooltip(target);
+    });
+    target.addEventListener("blur", () => {
+      hideFloatingTooltip(target);
+    });
+    target.addEventListener("pointerdown", () => {
+      hideFloatingTooltip();
+    });
+  });
+
+  window.addEventListener("scroll", handleFloatingTooltipViewportChange, true);
+  window.addEventListener("resize", handleFloatingTooltipViewportChange);
+}
+
+function handleFloatingTooltipViewportChange() {
+  if (!(floatingTooltipTarget instanceof HTMLElement)) {
+    return;
+  }
+  positionFloatingTooltip(floatingTooltipTarget);
+}
+
+function showFloatingTooltip(target) {
+  if (!(target instanceof HTMLElement) || !(floatingTooltipEl instanceof HTMLElement)) {
+    return;
+  }
+  if (target.matches(":disabled")) {
+    hideFloatingTooltip(target);
+    return;
+  }
+  const text = String(target.dataset.tooltip || "").trim();
+  if (!text) {
+    hideFloatingTooltip(target);
+    return;
+  }
+  floatingTooltipTarget = target;
+  floatingTooltipEl.textContent = text;
+  floatingTooltipEl.hidden = false;
+  positionFloatingTooltip(target);
+}
+
+function positionFloatingTooltip(target) {
+  if (!(target instanceof HTMLElement) || !(floatingTooltipEl instanceof HTMLElement) || floatingTooltipEl.hidden) {
+    return;
+  }
+  const rect = target.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) {
+    hideFloatingTooltip();
+    return;
+  }
+
+  const viewportPadding = 8;
+  const gap = 10;
+  const tooltipRect = floatingTooltipEl.getBoundingClientRect();
+  let top = rect.top - tooltipRect.height - gap;
+  let placement = "top";
+  if (top < viewportPadding) {
+    top = rect.bottom + gap;
+    placement = "bottom";
+  }
+  const maxTop = Math.max(viewportPadding, window.innerHeight - tooltipRect.height - viewportPadding);
+  top = clamp(top, viewportPadding, maxTop);
+
+  let left = rect.left + rect.width / 2 - tooltipRect.width / 2;
+  const maxLeft = Math.max(viewportPadding, window.innerWidth - tooltipRect.width - viewportPadding);
+  left = clamp(left, viewportPadding, maxLeft);
+
+  floatingTooltipEl.style.top = `${Math.round(top)}px`;
+  floatingTooltipEl.style.left = `${Math.round(left)}px`;
+  floatingTooltipEl.setAttribute("data-placement", placement);
+}
+
+function hideFloatingTooltip(target = null) {
+  if (target instanceof HTMLElement && target !== floatingTooltipTarget) {
+    return;
+  }
+  floatingTooltipTarget = null;
+  if (!(floatingTooltipEl instanceof HTMLElement)) {
+    return;
+  }
+  floatingTooltipEl.hidden = true;
+}
+
 function initFontSelector() {
   refs.fontFamilySelect.replaceChildren();
+  if (refs.fontPickerOptions instanceof HTMLElement) {
+    refs.fontPickerOptions.replaceChildren();
+  }
   FONT_OPTIONS.forEach((option) => {
     const row = document.createElement("option");
     row.value = option.id;
-    row.textContent = option.label;
+    row.textContent = `${option.label} Aa`;
+    row.style.fontFamily = option.family;
     refs.fontFamilySelect.append(row);
+
+    if (refs.fontPickerOptions instanceof HTMLElement) {
+      const optionButton = document.createElement("button");
+      optionButton.type = "button";
+      optionButton.className = "font-picker-option";
+      optionButton.setAttribute("role", "option");
+      optionButton.dataset.fontId = option.id;
+      optionButton.style.fontFamily = option.family;
+      optionButton.textContent = `${option.label} Aa`;
+      optionButton.addEventListener("click", () => {
+        setFontFamily(option.id);
+        closeFontPicker();
+      });
+      refs.fontPickerOptions.append(optionButton);
+    }
   });
+  renderFontPicker();
 }
 
 function initWinnerAnimationSelector() {
@@ -641,7 +962,22 @@ function initWinnerAnimationSelector() {
   });
 }
 
+function shouldReduceMotion() {
+  const mediaPrefersReduced =
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  return mediaPrefersReduced || sanitizeReduceMotion(state?.reduceMotion);
+}
+
+function updateReducedMotionClass() {
+  document.body.classList.toggle("reduce-motion", shouldReduceMotion());
+}
+
 function openInfoModal() {
+  if (refs.infoChangelogDetails instanceof HTMLDetailsElement) {
+    refs.infoChangelogDetails.open = false;
+  }
   refs.infoModal.hidden = false;
   refs.infoPanelToggle.setAttribute("aria-expanded", "true");
   void ensureInfoChangelogLoaded();
@@ -706,7 +1042,7 @@ function parseChangelogMarkdown(markdown) {
       return;
     }
 
-    const currentVersionMatch = trimmed.match(/^##\s+Version actual:\s*(.+)$/i);
+    const currentVersionMatch = trimmed.match(/^##\s+Versión actual:\s*(.+)$/i);
     if (currentVersionMatch) {
       parsed.currentVersion = currentVersionMatch[1].trim();
       return;
@@ -753,7 +1089,7 @@ function renderInfoChangelog(parsedChangelog) {
     safeEntries.forEach((entry) => {
       const item = document.createElement("li");
       const title = document.createElement("strong");
-      title.textContent = String(entry?.title || "Version sin titulo");
+      title.textContent = String(entry?.title || "Versión sin titulo");
       item.append(title);
 
       const notes = Array.isArray(entry?.notes) ? entry.notes : [];
@@ -801,6 +1137,10 @@ function openStatsModal() {
   if (isSpinning) {
     return;
   }
+  statsTotalsExpanded = false;
+  if (refs.statsRecentDetails instanceof HTMLDetailsElement) {
+    refs.statsRecentDetails.open = false;
+  }
   renderStats();
   refs.statsModal.hidden = false;
   refs.statsPanelToggle.setAttribute("aria-expanded", "true");
@@ -816,7 +1156,16 @@ function closeStatsModal(restoreFocus = true) {
 
 function triggerInfoEasterEgg() {
   if (isSpinning) {
-    setMessage("El easter egg se activa cuando la rula esta quieta.", "error");
+    setMessage("El easter egg se activa cuando la rula está quieta.", "error");
+    return;
+  }
+  if (shouldReduceMotion()) {
+    clearWinnerCelebrationVisuals();
+    refs.resultText.classList.add("winner-argentina");
+    celebrationTimeoutId = window.setTimeout(() => {
+      clearWinnerCelebrationVisuals();
+    }, 420);
+    setMessage("Easter egg argento activado (animación reducida).", "success");
     return;
   }
   clearWinnerCelebrationVisuals();
@@ -845,6 +1194,90 @@ function closeResetConfirmModal(restoreFocus = true) {
   refs.resetConfirmModal.hidden = true;
   if (restoreFocus) {
     refs.resetButton.focus();
+  }
+}
+
+function openBulkParticipantsModal() {
+  if (isSpinning) {
+    return;
+  }
+  refs.bulkParticipantsModal.hidden = false;
+  refs.bulkModeAppend.checked = true;
+  refs.bulkModeReplace.checked = false;
+  refs.bulkParticipantsInput.focus();
+}
+
+function closeBulkParticipantsModal(restoreFocus = true) {
+  refs.bulkParticipantsModal.hidden = true;
+  if (restoreFocus) {
+    refs.bulkAddButton.focus();
+  }
+}
+
+function confirmBulkParticipantsModal() {
+  const mode = refs.bulkModeReplace.checked ? "replace" : "append";
+  const applied = applyBulkParticipantsInput(String(refs.bulkParticipantsInput?.value || ""), mode);
+  if (!applied) {
+    return;
+  }
+  refs.bulkParticipantsInput.value = "";
+  closeBulkParticipantsModal();
+}
+
+function openExportOptionsModal() {
+  if (isSpinning) {
+    return;
+  }
+  refs.exportIncludeConfig.checked = true;
+  refs.exportIncludeStats.checked = true;
+  refs.exportOptionsModal.hidden = false;
+}
+
+function closeExportOptionsModal(restoreFocus = true) {
+  refs.exportOptionsModal.hidden = true;
+  if (restoreFocus) {
+    refs.exportConfigButton.focus();
+  }
+}
+
+function getSelectedExportOptions() {
+  return {
+    includeConfig: refs.exportIncludeConfig.checked === true,
+    includeStats: refs.exportIncludeStats.checked === true,
+  };
+}
+
+function confirmExportOptionsModal() {
+  exportCurrentConfig(getSelectedExportOptions());
+  closeExportOptionsModal();
+}
+
+function openImportOptionsModal() {
+  if (isSpinning) {
+    return;
+  }
+  refs.importIncludeConfig.checked = true;
+  refs.importIncludeStats.checked = true;
+  refs.importOptionsModal.hidden = false;
+}
+
+function closeImportOptionsModal(restoreFocus = true) {
+  refs.importOptionsModal.hidden = true;
+  if (restoreFocus) {
+    refs.importConfigButton.focus();
+  }
+}
+
+function confirmImportOptionsModal() {
+  importIncludeConfigOnNextFile = refs.importIncludeConfig.checked === true;
+  importIncludeStatsOnNextFile = refs.importIncludeStats.checked === true;
+  if (!importIncludeConfigOnNextFile && !importIncludeStatsOnNextFile) {
+    setMessage("Selecciona al menos una opción para importar.", "error");
+    return;
+  }
+  closeImportOptionsModal(false);
+  if (refs.importConfigInput instanceof HTMLInputElement) {
+    refs.importConfigInput.click();
   }
 }
 
@@ -892,7 +1325,64 @@ function initColorModal() {
 }
 
 function initEmojiModal() {
+  refreshEmojiCatalogData(loadEmojiCatalog());
   renderEmojiSections("");
+}
+
+function refreshEmojiCatalogData(catalog) {
+  EMOJI_CATALOG = catalog || null;
+  EMOJI_SECTIONS = buildEmojiSections(EMOJI_CATALOG);
+  EMOJI_OPTIONS = EMOJI_SECTIONS.flatMap((section) => section.items);
+  EMOJI_NAME_INDEX = buildEmojiNameIndex(EMOJI_SECTIONS, EMOJI_CATALOG);
+}
+
+async function ensureEmojiCatalogLoaded() {
+  if (EMOJI_CATALOG) {
+    return true;
+  }
+  if (emojiCatalogLoadPromise) {
+    await emojiCatalogLoadPromise;
+    return Boolean(EMOJI_CATALOG);
+  }
+
+  emojiCatalogLoadPromise = loadEmojiCatalogScript()
+    .then(() => {
+      refreshEmojiCatalogData(loadEmojiCatalog());
+    })
+    .catch(() => {})
+    .finally(() => {
+      emojiCatalogLoadPromise = null;
+    });
+
+  await emojiCatalogLoadPromise;
+  return Boolean(EMOJI_CATALOG);
+}
+
+function loadEmojiCatalogScript() {
+  if (globalThis?.TOCA_TOCA_EMOJI_CATALOG) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-emoji-catalog="true"]');
+    if (existing instanceof HTMLScriptElement) {
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener("error", () => reject(new Error("No se pudo cargar emoji-catalog.js")), {
+        once: true,
+      });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = EMOJI_CATALOG_SCRIPT_PATH;
+    script.defer = true;
+    script.dataset.emojiCatalog = "true";
+    script.addEventListener("load", () => resolve(), { once: true });
+    script.addEventListener("error", () => reject(new Error("No se pudo cargar emoji-catalog.js")), {
+      once: true,
+    });
+    document.head.append(script);
+  });
 }
 
 function sanitizeColorPaletteId(rawValue) {
@@ -981,7 +1471,7 @@ function renderEmojiSections(rawFilter) {
   }
   const empty = document.createElement("p");
   empty.className = "emoji-empty";
-  empty.textContent = "No hay emojis que coincidan con la busqueda.";
+  empty.textContent = "No hay emojis que coincidan con la búsqueda.";
   refs.emojiSections.append(empty);
 }
 
@@ -1173,9 +1663,12 @@ function renderSoundToggle() {
   refs.soundToggle.textContent = muted ? "🔇" : "🔊";
   refs.soundToggle.classList.toggle("is-muted", muted);
   refs.soundToggle.setAttribute("aria-pressed", String(muted));
-  refs.soundToggle.title = soundLabel;
+  refs.soundToggle.removeAttribute("title");
   refs.soundToggle.setAttribute("aria-label", soundLabel);
   refs.soundToggle.setAttribute("data-tooltip", soundLabel);
+  if (floatingTooltipTarget === refs.soundToggle) {
+    showFloatingTooltip(refs.soundToggle);
+  }
 }
 
 function renderDuration() {
@@ -1183,7 +1676,7 @@ function renderDuration() {
   refs.durationRangeMax.value = String(state.spinDurationMaxSec);
   refs.durationMinNumber.value = String(state.spinDurationMinSec);
   refs.durationMaxNumber.value = String(state.spinDurationMaxSec);
-  refs.durationLabel.textContent = `Duracion aleatoria: ${state.spinDurationMinSec}s - ${state.spinDurationMaxSec}s`;
+  refs.durationLabel.textContent = `Duración aleatoria: ${state.spinDurationMinSec}s - ${state.spinDurationMaxSec}s`;
   const minPct =
     ((state.spinDurationMinSec - MIN_SPIN_DURATION) / (MAX_SPIN_DURATION - MIN_SPIN_DURATION)) *
     100;
@@ -1200,29 +1693,97 @@ function renderTextSettings() {
   refs.textPositionRange.value = String(state.textPositionPct);
   refs.fontSizeRange.value = String(state.fontSizePx);
   refs.fontFamilySelect.value = state.fontFamilyId;
+  renderFontPicker();
   refs.winAnimationSelect.value = state.winnerAnimationMode;
-  refs.textPositionLabel.textContent = `Posicion en la seccion: ${state.textPositionPct}%`;
-  refs.fontSizeLabel.textContent = `Tamano de fuente: ${state.fontSizePx}px`;
+  const reducedMotionEnabled = sanitizeReduceMotion(state.reduceMotion);
+  refs.reduceMotionToggle.checked = reducedMotionEnabled;
+  const reduceMotionLabel = reducedMotionEnabled
+    ? "Animaciones reducidas (modo tortuga)"
+    : "Animaciones completas (modo conejo)";
+  refs.reduceMotionToggle.title = reduceMotionLabel;
+  refs.reduceMotionToggle.setAttribute("aria-label", reduceMotionLabel);
+  refs.textPositionLabel.textContent = `Posición en la sección: ${state.textPositionPct}%`;
+  refs.fontSizeLabel.textContent = `Tamaño de fuente: ${state.fontSizePx}px`;
+}
+
+function renderFontPicker() {
+  if (!(refs.fontFamilySelect instanceof HTMLSelectElement)) {
+    return;
+  }
+  const selected = FONT_OPTION_MAP.get(sanitizeFontFamily(refs.fontFamilySelect.value));
+  const fallback = FONT_OPTION_MAP.get(DEFAULT_FONT_FAMILY_ID);
+  const option = selected || fallback;
+  refs.fontFamilySelect.style.fontFamily = option?.family || "";
+
+  if (refs.fontPickerSummary instanceof HTMLElement) {
+    refs.fontPickerSummary.textContent = `${option?.label || "Fuente"} Aa`;
+    refs.fontPickerSummary.style.fontFamily = option?.family || "";
+  }
+
+  if (refs.fontPickerOptions instanceof HTMLElement) {
+    const safeId = sanitizeFontFamily(refs.fontFamilySelect.value);
+    const optionButtons = refs.fontPickerOptions.querySelectorAll(".font-picker-option");
+    optionButtons.forEach((button) => {
+      if (!(button instanceof HTMLElement)) {
+        return;
+      }
+      const isActive = button.dataset.fontId === safeId;
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-selected", String(isActive));
+    });
+  }
+}
+
+function closeFontPicker() {
+  if (refs.fontPicker instanceof HTMLDetailsElement) {
+    refs.fontPicker.open = false;
+  }
+}
+
+function getParticipantsScrollContainer() {
+  if (!(refs.itemList instanceof HTMLElement)) {
+    return null;
+  }
+  const explicitWrapper = refs.itemList.closest(".participants-list-scroll");
+  if (explicitWrapper instanceof HTMLElement) {
+    return explicitWrapper;
+  }
+  const panelBody = refs.itemList.closest(".participants-panel-body");
+  if (panelBody instanceof HTMLElement) {
+    return panelBody;
+  }
+  const genericPanelBody = refs.itemList.closest(".config-body");
+  return genericPanelBody instanceof HTMLElement ? genericPanelBody : null;
 }
 
 function renderItemList() {
+  const scrollContainer = getParticipantsScrollContainer();
+  const previousScrollTop = scrollContainer instanceof HTMLElement ? scrollContainer.scrollTop : 0;
   const maxParticipantsReached = state.items.length >= MAX_PARTICIPANTS;
   const visibleCount = getVisibleParticipantCount(state.items);
   const canEqualize = visibleCount >= MIN_PARTICIPANTS;
+  refs.bulkParticipantsInput.disabled = isSpinning;
+  refs.bulkAddButton.disabled = isSpinning;
+  refs.exportConfigButton.disabled = isSpinning;
+  refs.importConfigButton.disabled = isSpinning;
   refs.addItemButton.disabled = isSpinning || maxParticipantsReached;
-  refs.addItemButton.title = maxParticipantsReached
-    ? `Maximo ${MAX_PARTICIPANTS} participantes por configuracion.`
+  const addItemTooltip = maxParticipantsReached
+    ? `Máximo ${MAX_PARTICIPANTS} participantes por configuración.`
     : "Agregar participante";
+  refs.addItemButton.dataset.tooltip = addItemTooltip;
+  refs.addItemButton.removeAttribute("title");
   refs.addItemButton.setAttribute(
     "aria-label",
     maxParticipantsReached
-      ? `Maximo ${MAX_PARTICIPANTS} participantes alcanzado`
+      ? `Máximo ${MAX_PARTICIPANTS} participantes alcanzado`
       : "Agregar participante",
   );
   refs.equalizePercentagesButton.disabled = isSpinning || !canEqualize;
-  refs.equalizePercentagesButton.title = canEqualize
+  const equalizeTooltip = canEqualize
     ? "Igualar porcentajes de participantes visibles"
     : "Se necesitan al menos 2 participantes visibles";
+  refs.equalizePercentagesButton.dataset.tooltip = equalizeTooltip;
+  refs.equalizePercentagesButton.removeAttribute("title");
   refs.equalizePercentagesButton.setAttribute(
     "aria-label",
     canEqualize
@@ -1293,7 +1854,7 @@ function renderItemList() {
     pctInput.setAttribute("aria-label", `Porcentaje del participante ${index + 1}`);
     pctInput.disabled = isSpinning || isHidden;
     if (isHidden) {
-      pctInput.title = "Porcentaje bloqueado porque esta oculto de la rula.";
+      pctInput.title = "Porcentaje bloqueado porque está oculto de la rula.";
     }
     pctInput.addEventListener("change", () => {
       const parsed = Number.parseFloat(pctInput.value);
@@ -1319,10 +1880,10 @@ function renderItemList() {
 
     const animationSummary = document.createElement("summary");
     animationSummary.textContent = animationChoice?.emoji || "🌐";
-    animationSummary.title = `Animacion: ${animationChoice?.label || "General"}`;
+    animationSummary.title = `Animación: ${animationChoice?.label || "General"}`;
     animationSummary.setAttribute(
       "aria-label",
-      `Animacion del participante ${index + 1}: ${animationChoice?.label || "General"}`,
+      `Animación del participante ${index + 1}: ${animationChoice?.label || "General"}`,
     );
     animationPicker.append(animationSummary);
 
@@ -1389,6 +1950,13 @@ function renderItemList() {
   });
 
   renderRetrySliceRow();
+  if (scrollContainer instanceof HTMLElement) {
+    requestAnimationFrame(() => {
+      if (scrollContainer.isConnected) {
+        scrollContainer.scrollTop = previousScrollTop;
+      }
+    });
+  }
 }
 
 function renderStats() {
@@ -1459,49 +2027,113 @@ function renderStats() {
   if (totals.length === 0) {
     refs.statsEmptyState.hidden = false;
     refs.statsTableWrap.hidden = true;
+    if (refs.statsTotalsToggle instanceof HTMLElement) {
+      refs.statsTotalsToggle.hidden = true;
+    }
+  } else {
+    refs.statsEmptyState.hidden = true;
+    refs.statsTableWrap.hidden = false;
+
+    const sorted = totals
+      .slice()
+      .sort((a, b) => {
+        const countDiff = (Number(b?.count) || 0) - (Number(a?.count) || 0);
+        if (countDiff !== 0) {
+          return countDiff;
+        }
+        const seenDiff = (Number(b?.lastSeenAt) || 0) - (Number(a?.lastSeenAt) || 0);
+        if (seenDiff !== 0) {
+          return seenDiff;
+        }
+        const displayA = resolveParticipantDisplay(a?.participantId, a?.snapshot);
+        const displayB = resolveParticipantDisplay(b?.participantId, b?.snapshot);
+        return normalizeName(displayA.name).localeCompare(normalizeName(displayB.name), "es", {
+          sensitivity: "base",
+        });
+      });
+
+    const shouldTruncate = sorted.length > DEFAULT_VISIBLE_TOTALS_ROWS;
+    const visibleRows = statsTotalsExpanded ? sorted : sorted.slice(0, DEFAULT_VISIBLE_TOTALS_ROWS);
+
+    if (refs.statsTotalsToggle instanceof HTMLElement) {
+      refs.statsTotalsToggle.hidden = !shouldTruncate;
+      refs.statsTotalsToggle.textContent = statsTotalsExpanded ? "Ver menos" : `Ver más (${sorted.length})`;
+      refs.statsTotalsToggle.setAttribute("aria-expanded", String(statsTotalsExpanded));
+    }
+
+    visibleRows.forEach((entry, index) => {
+      const tr = document.createElement("tr");
+
+      const rankTd = document.createElement("td");
+      rankTd.className = "stats-rank-cell";
+      rankTd.textContent = String(index + 1);
+
+      const playerTd = document.createElement("td");
+      const display = resolveParticipantDisplay(entry.participantId, entry.snapshot);
+      const playerCell = document.createElement("div");
+      playerCell.className = "stats-player-cell";
+      playerCell.append(buildStatsPlayerChip(display));
+      playerTd.append(playerCell);
+
+      const countTd = document.createElement("td");
+      countTd.className = "stats-count-cell";
+      countTd.textContent = String(Math.max(1, Math.round(Number(entry.count) || 1)));
+
+      tr.append(rankTd, playerTd, countTd);
+      refs.statsTableBody.append(tr);
+    });
+  }
+
+  renderStatsRecent();
+}
+
+function renderStatsRecent() {
+  if (
+    !(refs.statsRecentBody instanceof HTMLElement) ||
+    !(refs.statsRecentWrap instanceof HTMLElement) ||
+    !(refs.statsRecentEmptyState instanceof HTMLElement)
+  ) {
+    return;
+  }
+  refs.statsRecentBody.replaceChildren();
+  const historyEntries = getHistoryEntries()
+    .slice(-MAX_RECENT_STATS_ROWS)
+    .reverse();
+  if (historyEntries.length === 0) {
+    refs.statsRecentWrap.hidden = true;
+    refs.statsRecentEmptyState.hidden = false;
     return;
   }
 
-  refs.statsEmptyState.hidden = true;
-  refs.statsTableWrap.hidden = false;
-
-  const sorted = totals
-    .slice()
-    .sort((a, b) => {
-      const countDiff = (Number(b?.count) || 0) - (Number(a?.count) || 0);
-      if (countDiff !== 0) {
-        return countDiff;
-      }
-      const seenDiff = (Number(b?.lastSeenAt) || 0) - (Number(a?.lastSeenAt) || 0);
-      if (seenDiff !== 0) {
-        return seenDiff;
-      }
-      const displayA = resolveParticipantDisplay(a?.participantId, a?.snapshot);
-      const displayB = resolveParticipantDisplay(b?.participantId, b?.snapshot);
-      return normalizeName(displayA.name).localeCompare(normalizeName(displayB.name), "es", { sensitivity: "base" });
-    });
-
-  sorted.forEach((entry, index) => {
+  historyEntries.forEach((entry) => {
     const tr = document.createElement("tr");
+    const dateTd = document.createElement("td");
+    const timestamp = Math.max(0, Math.round(Number(entry?.timestamp) || 0));
+    const label = timestamp > 0 ? new Date(timestamp).toLocaleString("es") : "Sin fecha";
+    dateTd.textContent = label;
 
-    const rankTd = document.createElement("td");
-    rankTd.className = "stats-rank-cell";
-    rankTd.textContent = String(index + 1);
+    const winnerTd = document.createElement("td");
+    const display = resolveParticipantDisplay(entry?.winnerParticipantId, {
+      name: entry?.winnerName,
+      emoji: entry?.winnerEmoji,
+      color: entry?.winnerColor,
+    });
+    const cell = document.createElement("div");
+    cell.className = "stats-player-cell";
+    cell.append(buildStatsPlayerChip(display));
+    winnerTd.append(cell);
 
-    const playerTd = document.createElement("td");
-    const display = resolveParticipantDisplay(entry.participantId, entry.snapshot);
-    const playerCell = document.createElement("div");
-    playerCell.className = "stats-player-cell";
-    playerCell.append(buildStatsPlayerChip(display));
-    playerTd.append(playerCell);
-
-    const countTd = document.createElement("td");
-    countTd.className = "stats-count-cell";
-    countTd.textContent = String(Math.max(1, Math.round(Number(entry.count) || 1)));
-
-    tr.append(rankTd, playerTd, countTd);
-    refs.statsTableBody.append(tr);
+    tr.append(dateTd, winnerTd);
+    refs.statsRecentBody.append(tr);
   });
+
+  refs.statsRecentWrap.hidden = false;
+  refs.statsRecentEmptyState.hidden = true;
+}
+
+function toggleStatsTotalsExpanded() {
+  statsTotalsExpanded = !statsTotalsExpanded;
+  renderStats();
 }
 
 function buildStatsPlayerChip(rawDisplay, forceEmpty = false) {
@@ -1514,7 +2146,7 @@ function buildStatsPlayerChip(rawDisplay, forceEmpty = false) {
   }
   if (isRemoved) {
     chip.classList.add("stats-player-chip-removed");
-    chip.title = "Ya no esta en la ruleta";
+    chip.title = "Ya no está en la ruleta";
   }
   chip.style.setProperty("--player-color", sanitizeColor(display.color));
 
@@ -1534,7 +2166,7 @@ function buildStatsPlayerChip(rawDisplay, forceEmpty = false) {
     const removedMark = document.createElement("span");
     removedMark.className = "stats-player-removed-mark";
     removedMark.textContent = "✝";
-    removedMark.title = "Ya no esta en la ruleta";
+    removedMark.title = "Ya no está en la ruleta";
     removedMark.setAttribute("aria-hidden", "true");
     chip.append(removedMark);
   }
@@ -1577,8 +2209,8 @@ function renderRetrySliceRow() {
   const emojiPlaceholder = document.createElement("span");
   emojiPlaceholder.className = "retry-placeholder retry-emoji-placeholder";
   emojiPlaceholder.textContent = RETRY_SLICE_EMOJI;
-  emojiPlaceholder.title = "Emoji fijo de la seccion Tira otra vez";
-  emojiPlaceholder.setAttribute("aria-label", "Emoji fijo de la seccion Tira otra vez");
+  emojiPlaceholder.title = "Emoji fijo de la sección Tira otra vez";
+  emojiPlaceholder.setAttribute("aria-label", "Emoji fijo de la sección Tira otra vez");
 
   const nameTag = document.createElement("div");
   nameTag.className = "retry-name-tag";
@@ -1591,8 +2223,8 @@ function renderRetrySliceRow() {
   colorButton.type = "button";
   colorButton.className = "color-swatch retry-color-swatch";
   colorButton.style.background = retryColor;
-  colorButton.title = "Color de la seccion Tira otra vez";
-  colorButton.setAttribute("aria-label", "Color de la seccion Tira otra vez");
+  colorButton.title = "Color de la sección Tira otra vez";
+  colorButton.setAttribute("aria-label", "Color de la sección Tira otra vez");
   colorButton.disabled = isSpinning || !enabled;
   colorButton.addEventListener("click", () => {
     openColorModal(RETRY_SLICE_COLOR_INDEX);
@@ -1622,13 +2254,13 @@ function renderRetrySliceRow() {
   visibilityButton.className = "visibility-button";
   visibilityButton.textContent = enabled ? "👁" : "🙈";
   visibilityButton.title = enabled
-    ? "Ocultar seccion Tira otra vez de la rula"
-    : "Mostrar seccion Tira otra vez en la rula";
+    ? "Ocultar sección Tira otra vez de la rula"
+    : "Mostrar sección Tira otra vez en la rula";
   visibilityButton.setAttribute(
     "aria-label",
     enabled
-      ? "Ocultar seccion Tira otra vez de la rula"
-      : "Mostrar seccion Tira otra vez en la rula",
+      ? "Ocultar sección Tira otra vez de la rula"
+      : "Mostrar sección Tira otra vez en la rula",
   );
   visibilityButton.disabled = isSpinning;
   visibilityButton.addEventListener("click", () => {
@@ -1750,6 +2382,12 @@ function openEmojiModal(index) {
   syncEmojiModalPreview(activeEmojiDraft);
   renderEmojiSections("");
   refs.emojiSearchInput.focus();
+  void ensureEmojiCatalogLoaded().then((loaded) => {
+    if (!loaded || refs.emojiModal.hidden || activeEmojiIndex !== index) {
+      return;
+    }
+    renderEmojiSections(refs.emojiSearchInput.value);
+  });
 }
 
 function closeEmojiModal() {
@@ -2429,7 +3067,7 @@ function spinWheel() {
   refs.resultText.textContent = "Girando...";
   setMessage("");
 
-  const winnerIndex = weightedRandomIndex(spinEntries);
+  const winnerIndex = selectWinnerIndexForRoundMode(spinEntries);
   if (winnerIndex < 0) {
     setControlsDisabled(false);
     isSpinning = false;
@@ -2532,9 +3170,14 @@ function finalizeSpin(stoppedByClick) {
   const winnerItem = winnerEntry?.item;
   if (!winnerItem || typeof winnerItem !== "object") {
     refs.resultText.textContent = "No se pudo resolver un ganador valido.";
-    setMessage("Ocurrio un problema al registrar el resultado del giro.", "error");
+    setMessage("Ocurrió un problema al registrar el resultado del giro.", "error");
     return;
   }
+  applyRoundModeAfterWinner(winnerItem);
+  saveState();
+  drawWheel();
+  renderItemList();
+  recordSpinHistoryWinner(winnerItem);
   recordWinner(winnerItem);
   const winnerLabel = formatParticipantLabel(winnerItem);
   refs.resultText.textContent = `Ganó ${winnerLabel}.`;
@@ -2542,6 +3185,50 @@ function finalizeSpin(stoppedByClick) {
   playWinApplause();
   const celebrationDurationMs = triggerWinnerCelebration(winnerItem);
   startWinnerLights(Math.max(1200, celebrationDurationMs));
+}
+
+function selectWinnerIndexForRoundMode(spinEntries) {
+  const mode = sanitizeRoundMode(state.roundMode);
+  if (mode !== "cycle_no_repeat") {
+    return weightedRandomIndex(spinEntries);
+  }
+  const participantEntries = spinEntries.filter((entry) => entry?.type === "participant");
+  if (participantEntries.length < MIN_PARTICIPANTS) {
+    return weightedRandomIndex(spinEntries);
+  }
+
+  let remainingIds = sanitizeRoundCycleRemainingIds(
+    state.roundCycleRemainingIds,
+    participantEntries.map((entry) => entry.item),
+  );
+  if (remainingIds.length === 0) {
+    remainingIds = participantEntries
+      .map((entry) => sanitizeStatsParticipantId(entry?.item?.id))
+      .filter(Boolean);
+  }
+  const remainingSet = new Set(remainingIds);
+  const candidateEntries = spinEntries.filter((entry) => {
+    if (entry?.type === "retry") {
+      return true;
+    }
+    if (entry?.type !== "participant") {
+      return false;
+    }
+    return remainingSet.has(sanitizeStatsParticipantId(entry?.item?.id));
+  });
+  const winnerCandidateIndex = weightedRandomIndex(candidateEntries);
+  if (winnerCandidateIndex < 0) {
+    return weightedRandomIndex(spinEntries);
+  }
+  const winnerEntry = candidateEntries[winnerCandidateIndex];
+  const resolvedIndex = spinEntries.indexOf(winnerEntry);
+  return resolvedIndex >= 0 ? resolvedIndex : weightedRandomIndex(spinEntries);
+}
+
+function applyRoundModeAfterWinner(winnerItem) {
+  // Round mode is temporarily disabled; always behave as normal mode.
+  void winnerItem;
+  state.roundCycleRemainingIds = [];
 }
 
 function getWinnerIndexFromRotation(rotationDeg, items = getSpinEntries()) {
@@ -2954,8 +3641,7 @@ function startBackgroundEmojiRain() {
   if (!(refs.bgEmojiRain instanceof HTMLElement)) {
     return;
   }
-  const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-  if (prefersReducedMotion) {
+  if (shouldReduceMotion()) {
     return;
   }
   stopBackgroundEmojiRain();
@@ -3034,7 +3720,7 @@ function ensureRimLightAnimationLoop() {
 
 function addParticipant() {
   if (state.items.length >= MAX_PARTICIPANTS) {
-    setMessage(`Maximo ${MAX_PARTICIPANTS} participantes por configuracion.`, "error");
+    setMessage(`Máximo ${MAX_PARTICIPANTS} participantes por configuración.`, "error");
     return;
   }
 
@@ -3058,6 +3744,8 @@ function addParticipant() {
       ),
     );
   }
+  hiddenParticipantPctById.clear();
+  state.roundCycleRemainingIds = [];
   saveState();
   render();
   setMessage("Participante agregado y porcentajes equilibrados.", "success");
@@ -3079,6 +3767,7 @@ function equalizeParticipantPercentages() {
       getParticipantSharePctForConfig(state.retrySliceEnabled, state.retrySlicePct),
     ),
   );
+  state.roundCycleRemainingIds = [];
   saveState();
   render();
   setMessage("Porcentajes de participantes igualados.", "success");
@@ -3090,6 +3779,8 @@ function removeParticipant(index) {
     return;
   }
   state.items.splice(index, 1);
+  hiddenParticipantPctById.clear();
+  state.roundCycleRemainingIds = [];
   normalizeVisiblePercentages(
     state.items,
     getParticipantSharePctForConfig(state.retrySliceEnabled, state.retrySlicePct),
@@ -3097,6 +3788,307 @@ function removeParticipant(index) {
   saveState();
   render();
   setMessage("Participante eliminado.", "success");
+}
+
+function applyBulkParticipantsInput(rawText, mode = "append") {
+  if (isSpinning) {
+    return false;
+  }
+  const parsed = parseBulkParticipants(rawText);
+  if (parsed.length === 0) {
+    setMessage("No se encontraron participantes validos en la lista.", "error");
+    return false;
+  }
+
+  const bulkMode = mode === "replace" ? "replace" : "append";
+  if (bulkMode === "replace") {
+    const nextItems = [];
+    const nameSet = new Set();
+    parsed.forEach((entry) => {
+      if (nextItems.length >= MAX_PARTICIPANTS) {
+        return;
+      }
+      const index = nextItems.length;
+      const normalizedName = normalizeName(entry.name, index).slice(0, MAX_PARTICIPANT_NAME_LENGTH);
+      const normalizedKey = normalizedName.toLowerCase();
+      if (nameSet.has(normalizedKey)) {
+        return;
+      }
+      nameSet.add(normalizedKey);
+      nextItems.push({
+        id: makeId(),
+        emoji: sanitizeEmoji(entry.emoji, index),
+        name: normalizedName,
+        color: PALETTE[index % PALETTE.length],
+        animationMode: DEFAULT_PARTICIPANT_ANIMATION_MODE,
+        hidden: false,
+        pct: 0,
+      });
+    });
+
+    if (nextItems.length < MIN_PARTICIPANTS) {
+      setMessage("Para reemplazar se necesitan al menos 2 participantes validos.", "error");
+      return false;
+    }
+
+    state.items = nextItems;
+    hiddenParticipantPctById.clear();
+    state.roundCycleRemainingIds = [];
+    normalizeVisiblePercentages(
+      state.items,
+      getParticipantSharePctForConfig(state.retrySliceEnabled, state.retrySlicePct),
+    );
+    saveState();
+    render();
+    setMessage(`Se reemplazo la lista con ${nextItems.length} participantes.`, "success");
+    return true;
+  }
+
+  const existingNames = new Set(
+    state.items.map((item, index) => normalizeName(item?.name, index).toLowerCase()),
+  );
+  let added = 0;
+
+  parsed.forEach((entry) => {
+    if (state.items.length >= MAX_PARTICIPANTS) {
+      return;
+    }
+    const normalizedName = normalizeName(entry.name, state.items.length).slice(0, MAX_PARTICIPANT_NAME_LENGTH);
+    const normalizedKey = normalizedName.toLowerCase();
+    if (existingNames.has(normalizedKey)) {
+      return;
+    }
+    existingNames.add(normalizedKey);
+    const index = state.items.length;
+    state.items.push({
+      id: makeId(),
+      emoji: sanitizeEmoji(entry.emoji, index),
+      name: normalizedName,
+      color: PALETTE[index % PALETTE.length],
+      animationMode: DEFAULT_PARTICIPANT_ANIMATION_MODE,
+      hidden: false,
+      pct: 0,
+    });
+    added += 1;
+  });
+
+  if (added === 0) {
+    setMessage("No se agregaron participantes (duplicados o límite alcanzado).", "error");
+    return false;
+  }
+
+  state.roundCycleRemainingIds = [];
+  hiddenParticipantPctById.clear();
+  normalizeVisiblePercentages(
+    state.items,
+    getParticipantSharePctForConfig(state.retrySliceEnabled, state.retrySlicePct),
+  );
+  saveState();
+  render();
+  setMessage(`Se agregaron ${added} participantes desde la lista.`, "success");
+  return true;
+}
+
+function parseBulkParticipants(rawText) {
+  return String(rawText || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const grapheme = firstGrapheme(line);
+      if (isLikelyEmoji(grapheme)) {
+        const rest = line.slice(grapheme.length).trim();
+        return {
+          emoji: grapheme,
+          name: rest || "Jugador",
+        };
+      }
+      return {
+        emoji: sanitizeEmoji(undefined, 0),
+        name: line,
+      };
+    });
+}
+
+function exportCurrentConfig(options = {}) {
+  const includeConfig = options?.includeConfig !== false;
+  const includeStats = options?.includeStats !== false;
+
+  const payload = {
+    version: 2,
+    kind: "custom_backup",
+    exportedAt: Date.now(),
+    options: {
+      includeConfig,
+      includeStats,
+    },
+  };
+  if (includeConfig) {
+    payload.config = sanitizeState(state);
+  }
+  if (includeStats) {
+    payload.statsStore = sanitizeStatsStore(statsStore);
+    payload.spinHistory = sanitizeSpinHistory(spinHistory);
+  }
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  const configLabel = includeConfig ? "con-config" : "sin-config";
+  const statsLabel = includeStats ? "con-stats" : "sin-stats";
+  anchor.download = `toca-toca-backup-${configLabel}-${statsLabel}.json`;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+  setMessage(
+    `Backup exportado (${includeConfig ? "con configuración" : "sin configuración"}, ${includeStats ? "con estadísticas" : "sin estadísticas"}).`,
+    "success",
+  );
+}
+
+function looksLikeConfigPayload(input) {
+  if (!input || typeof input !== "object") {
+    return false;
+  }
+  if (Array.isArray(input?.items) && input.items.length > 0) {
+    return true;
+  }
+  return (
+    "spinDurationMinSec" in input ||
+    "spinDurationMaxSec" in input ||
+    "textLayout" in input ||
+    "wheelEmojiMode" in input ||
+    "fontSizePx" in input ||
+    "fontFamilyId" in input ||
+    "winnerAnimationMode" in input ||
+    "roundMode" in input ||
+    "retrySliceEnabled" in input
+  );
+}
+
+function selectLegacyProfileConfig(input, preferredId = "") {
+  const profileId =
+    typeof preferredId === "string"
+      ? preferredId.trim().slice(0, 64)
+      : typeof input?.activeProfileId === "string"
+        ? input.activeProfileId.trim().slice(0, 64)
+        : "";
+  const profiles = Array.isArray(input?.profiles) ? input.profiles : [];
+  if (profiles.length === 0) {
+    return null;
+  }
+  const preferred = profiles.find(
+    (entry) =>
+      entry &&
+      typeof entry === "object" &&
+      typeof entry.id === "string" &&
+      entry.id.trim() === profileId &&
+      entry.config &&
+      typeof entry.config === "object",
+  );
+  if (preferred?.config) {
+    return sanitizeState(preferred.config);
+  }
+  const firstWithConfig = profiles.find((entry) => entry && typeof entry?.config === "object");
+  return firstWithConfig?.config ? sanitizeState(firstWithConfig.config) : null;
+}
+
+function resolveImportConfigPayload(parsed) {
+  if (parsed?.config && typeof parsed.config === "object") {
+    return sanitizeState(parsed.config);
+  }
+  if (parsed?.profilesStore || parsed?.profiles) {
+    const legacyProfileConfig = selectLegacyProfileConfig(
+      parsed?.profilesStore || {
+        activeProfileId: parsed?.activeProfileId,
+        profiles: parsed?.profiles,
+      },
+      parsed?.activeProfileId,
+    );
+    if (legacyProfileConfig) {
+      return legacyProfileConfig;
+    }
+  }
+  if (looksLikeConfigPayload(parsed)) {
+    return sanitizeState(parsed);
+  }
+  return null;
+}
+
+async function importConfigFromFile() {
+  const input = refs.importConfigInput;
+  if (!(input instanceof HTMLInputElement) || !input.files || input.files.length === 0) {
+    return;
+  }
+  const file = input.files[0];
+  const includeConfig = importIncludeConfigOnNextFile === true;
+  const includeStats = importIncludeStatsOnNextFile === true;
+  try {
+    const text = await file.text();
+    const parsed = safeParse(text);
+    if (!parsed || typeof parsed !== "object") {
+      throw new Error("Formato invalido");
+    }
+
+    let importedConfig = false;
+    let importedStats = false;
+
+    if (includeConfig) {
+      const configPayload = resolveImportConfigPayload(parsed);
+      if (configPayload) {
+        state = configPayload;
+        hiddenParticipantPctById.clear();
+        saveState();
+        importedConfig = true;
+      }
+    }
+
+    if (includeStats) {
+      if (parsed?.statsStore || parsed?.stats) {
+        statsStore = sanitizeStatsStore(parsed?.statsStore || parsed?.stats);
+        saveStatsStore();
+        importedStats = true;
+      }
+      if (parsed?.spinHistory || parsed?.history) {
+        spinHistory = sanitizeSpinHistory(parsed?.spinHistory || parsed?.history);
+        saveSpinHistory();
+        importedStats = true;
+      }
+    }
+
+    if (!importedConfig && !importedStats) {
+      throw new Error("Sin datos importables");
+    }
+
+    winnerEffectProfile = buildWinnerEffectProfile();
+    updateReducedMotionClass();
+    if (shouldReduceMotion()) {
+      stopBackgroundEmojiRain();
+      if (refs.bgEmojiRain instanceof HTMLElement) {
+        refs.bgEmojiRain.replaceChildren();
+      }
+    } else {
+      startBackgroundEmojiRain();
+    }
+    saveState();
+    stats = loadStats();
+    render();
+    if (importedConfig && importedStats) {
+      setMessage("Importación aplicada: configuración + estadísticas.", "success");
+    } else if (importedConfig) {
+      setMessage("Importación aplicada: configuración.", "success");
+    } else {
+      setMessage("Importación aplicada: estadísticas.", "success");
+    }
+  } catch (_error) {
+    setMessage("No se pudo importar el archivo seleccionado.", "error");
+  } finally {
+    input.value = "";
+    importIncludeConfigOnNextFile = true;
+    importIncludeStatsOnNextFile = true;
+  }
 }
 
 function resetConfigScope() {
@@ -3109,9 +4101,13 @@ function resetConfigScope() {
   state.fontSizePx = defaults.fontSizePx;
   state.fontFamilyId = defaults.fontFamilyId;
   state.winnerAnimationMode = defaults.winnerAnimationMode;
+  state.reduceMotion = defaults.reduceMotion;
+  state.roundMode = defaults.roundMode;
+  state.roundCycleRemainingIds = [];
   state.retrySliceEnabled = defaults.retrySliceEnabled;
   state.retrySlicePct = defaults.retrySlicePct;
   state.retrySliceColor = defaults.retrySliceColor;
+  hiddenParticipantPctById.clear();
   normalizeVisiblePercentages(
     state.items,
     getParticipantSharePctForConfig(state.retrySliceEnabled, state.retrySlicePct),
@@ -3121,6 +4117,8 @@ function resetConfigScope() {
 function resetUsersScope() {
   const defaults = defaultState();
   state.items = defaults.items.map((item) => ({ ...item }));
+  hiddenParticipantPctById.clear();
+  state.roundCycleRemainingIds = [];
   normalizeVisiblePercentages(
     state.items,
     getParticipantSharePctForConfig(state.retrySliceEnabled, state.retrySlicePct),
@@ -3129,7 +4127,10 @@ function resetUsersScope() {
 
 function resetHistoryScope() {
   stats = defaultStats();
-  saveStats();
+  statsStore = defaultStatsStore(stats);
+  saveStatsStore();
+  spinHistory = defaultSpinHistory();
+  saveSpinHistory();
 }
 
 function applyResetScopes(scopes) {
@@ -3157,6 +4158,16 @@ function applyResetScopes(scopes) {
     currentRotationDeg = 0;
     isSpinning = false;
     setRimLightMode(RIM_LIGHT_MODE.STANDBY);
+    winnerEffectProfile = buildWinnerEffectProfile();
+    updateReducedMotionClass();
+    if (shouldReduceMotion()) {
+      stopBackgroundEmojiRain();
+      if (refs.bgEmojiRain instanceof HTMLElement) {
+        refs.bgEmojiRain.replaceChildren();
+      }
+    } else {
+      startBackgroundEmojiRain();
+    }
     if (sanitizeSoundMuted(state.soundMuted)) {
       if (audioContext && audioContext.state === "running") {
         audioContext.suspend().catch(() => {});
@@ -3183,7 +4194,7 @@ function describeResetScopes(scopes) {
 
   const labels = [];
   if (scopes.config) {
-    labels.push("configuracion");
+    labels.push("configuración");
   }
   if (scopes.users) {
     labels.push("usuarios");
@@ -3272,6 +4283,89 @@ function setFontSize(rawValue) {
   drawWheel();
 }
 
+function applyAutoTextTuning() {
+  if (isSpinning) {
+    return;
+  }
+  const tuning = computeAutoTextTuning();
+  if (!tuning) {
+    setMessage("No se pudo calcular un ajuste automático.", "error");
+    return;
+  }
+  const nextPosition = sanitizeTextPosition(tuning.textPositionPct);
+  const nextFontSize = sanitizeFontSize(tuning.fontSizePx);
+  const changed = nextPosition !== state.textPositionPct || nextFontSize !== state.fontSizePx;
+
+  state.textPositionPct = nextPosition;
+  state.fontSizePx = nextFontSize;
+  saveState();
+  renderTextSettings();
+  drawWheel();
+
+  if (changed) {
+    setMessage(`Ajuste aplicado: posición ${nextPosition}% y fuente ${nextFontSize}px.`, "success");
+    return;
+  }
+  setMessage("La posición y el tamaño ya estaban optimizados.", "success");
+}
+
+function computeAutoTextTuning() {
+  const entries = getSpinEntries();
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return null;
+  }
+
+  const labels = entries.map((entry) => formatSpinEntryLabel(entry)).filter(Boolean);
+  if (labels.length === 0) {
+    return null;
+  }
+
+  const minPct = Math.max(0.3, Math.min(...entries.map((entry) => Math.max(0, Number(entry?.pct) || 0))));
+  const longestLabelLength = labels.reduce((max, label) => Math.max(max, Array.from(label).length), 0);
+  const canvasSize = Number(refs.canvas?.width) || 0;
+  const center = canvasSize > 0 ? canvasSize / 2 : 280;
+  const sectionRadius = Math.max(120, center - 26);
+
+  const densityPenalty = Math.max(0, entries.length - 8);
+  const labelPenalty = Math.max(0, longestLabelLength - 10);
+  const layoutBias = state.textLayout === "radial" ? 4 : state.textLayout === "horizontal" ? -1 : 0;
+
+  let textPositionPct = clamp(
+    Math.round(56 - densityPenalty * 0.58 - labelPenalty * 0.42 + layoutBias),
+    MIN_TEXT_POSITION_PCT,
+    MAX_TEXT_POSITION_PCT,
+  );
+
+  const font = FONT_OPTION_MAP.get(state.fontFamilyId) || FONT_OPTION_MAP.get(DEFAULT_FONT_FAMILY_ID);
+  const minSegmentArcLength = (minPct / 100) * TAU * sectionRadius * (textPositionPct / 100);
+  const widthAllowanceByLayout =
+    state.textLayout === "radial"
+      ? Math.max(minSegmentArcLength * 1.25, sectionRadius * 0.82)
+      : minSegmentArcLength;
+  const maxAllowedWidth = Math.max(48, widthAllowanceByLayout - 14);
+
+  let fontSizePx = MIN_FONT_SIZE_PX;
+  for (let candidate = MAX_FONT_SIZE_PX; candidate >= MIN_FONT_SIZE_PX; candidate -= 1) {
+    ctx.save();
+    ctx.font = `700 ${candidate}px ${font.family}`;
+    const widestLabel = labels.reduce((max, label) => Math.max(max, ctx.measureText(label).width), 0);
+    ctx.restore();
+    if (widestLabel <= maxAllowedWidth) {
+      fontSizePx = candidate;
+      break;
+    }
+  }
+
+  if (fontSizePx <= MIN_FONT_SIZE_PX && longestLabelLength >= 16) {
+    textPositionPct = clamp(textPositionPct - 3, MIN_TEXT_POSITION_PCT, MAX_TEXT_POSITION_PCT);
+  }
+
+  return {
+    textPositionPct,
+    fontSizePx: Math.max(MIN_FONT_SIZE_PX, fontSizePx),
+  };
+}
+
 function setFontFamily(rawValue) {
   const next = sanitizeFontFamily(rawValue);
   if (next === state.fontFamilyId) {
@@ -3293,6 +4387,49 @@ function setWinnerAnimationMode(rawValue) {
   state.winnerAnimationMode = next;
   saveState();
   renderTextSettings();
+}
+
+function setRoundMode(rawValue) {
+  const next = sanitizeRoundMode(rawValue);
+  if (next === sanitizeRoundMode(state.roundMode)) {
+    renderTextSettings();
+    return;
+  }
+  state.roundMode = next;
+  state.roundCycleRemainingIds = [];
+  saveState();
+  renderTextSettings();
+}
+
+function setReduceMotion(rawValue) {
+  const next = sanitizeReduceMotion(rawValue);
+  if (next === sanitizeReduceMotion(state.reduceMotion)) {
+    renderTextSettings();
+    return;
+  }
+  const shouldKeepConfigScroll =
+    refs.configBody instanceof HTMLElement && refs.configPanel instanceof HTMLElement && refs.configPanel.classList.contains("is-open");
+  const previousConfigScrollTop = shouldKeepConfigScroll ? refs.configBody.scrollTop : 0;
+  state.reduceMotion = next;
+  winnerEffectProfile = buildWinnerEffectProfile();
+  updateReducedMotionClass();
+  if (next) {
+    stopBackgroundEmojiRain();
+    if (refs.bgEmojiRain instanceof HTMLElement) {
+      refs.bgEmojiRain.replaceChildren();
+    }
+  } else {
+    startBackgroundEmojiRain();
+  }
+  saveState();
+  renderTextSettings();
+  if (shouldKeepConfigScroll) {
+    requestAnimationFrame(() => {
+      if (refs.configBody instanceof HTMLElement) {
+        refs.configBody.scrollTop = previousConfigScrollTop;
+      }
+    });
+  }
 }
 
 function setSoundMuted(rawValue) {
@@ -3340,11 +4477,46 @@ function setParticipantHidden(index, hidden) {
     setMessage("La rula necesita al menos 2 participantes visibles.", "error");
     return;
   }
+  const participantId = sanitizeStatsParticipantId(state.items[index]?.id);
+
+  if (nextHidden) {
+    if (participantId) {
+      hiddenParticipantPctById.set(participantId, Math.max(MIN_ITEM_UNITS / 100, Number(state.items[index].pct) || 0));
+    }
+    state.items[index].hidden = true;
+    state.roundCycleRemainingIds = [];
+    normalizeVisiblePercentages(
+      state.items,
+      getParticipantSharePctForConfig(state.retrySliceEnabled, state.retrySlicePct),
+    );
+    saveState();
+    render();
+    return;
+  }
+
   state.items[index].hidden = nextHidden;
-  normalizeVisiblePercentages(
-    state.items,
-    getParticipantSharePctForConfig(state.retrySliceEnabled, state.retrySlicePct),
-  );
+  state.roundCycleRemainingIds = [];
+  const participantSharePct = getParticipantSharePctForConfig(state.retrySliceEnabled, state.retrySlicePct);
+  const visibleItems = getVisibleItems(state.items);
+  const targetUnits = getParticipantTargetUnits(visibleItems.length, participantSharePct);
+  const storedPct = participantId ? hiddenParticipantPctById.get(participantId) : null;
+
+  if (Number.isFinite(Number(storedPct))) {
+    const others = visibleItems.filter((item) => sanitizeStatsParticipantId(item?.id) !== participantId);
+    const maxAllowedForCurrent = Math.max(
+      MIN_ITEM_UNITS,
+      targetUnits - Math.max(MIN_ITEM_UNITS * others.length, 0),
+    );
+    const restoredUnits = clamp(Math.round(Number(storedPct) * 100), MIN_ITEM_UNITS, maxAllowedForCurrent);
+    state.items[index].pct = restoredUnits / 100;
+    if (others.length > 0) {
+      normalizePercentages(others, targetUnits - restoredUnits);
+    }
+    hiddenParticipantPctById.delete(participantId);
+  } else {
+    normalizeVisiblePercentages(state.items, participantSharePct);
+  }
+
   saveState();
   render();
 }
@@ -3566,6 +4738,9 @@ function defaultState() {
     fontFamilyId: DEFAULT_FONT_FAMILY_ID,
     winnerAnimationMode: DEFAULT_WINNER_ANIMATION_MODE,
     soundMuted: DEFAULT_SOUND_MUTED,
+    reduceMotion: DEFAULT_REDUCE_MOTION,
+    roundMode: DEFAULT_ROUND_MODE,
+    roundCycleRemainingIds: [],
     retrySliceEnabled: DEFAULT_RETRY_SLICE_ENABLED,
     retrySlicePct: DEFAULT_RETRY_SLICE_PCT,
     retrySliceColor: DEFAULT_RETRY_SLICE_COLOR,
@@ -3604,6 +4779,8 @@ function sanitizeState(input) {
 
   const retryEnabled = sanitizeRetrySliceEnabled(input?.retrySliceEnabled);
   const retryPct = sanitizeRetrySlicePct(input?.retrySlicePct);
+  const roundMode = DEFAULT_ROUND_MODE;
+  const roundCycleRemainingIds = [];
   normalizeVisiblePercentages(items, getParticipantSharePctForConfig(retryEnabled, retryPct));
   return {
     version: CONFIG_VERSION,
@@ -3616,6 +4793,9 @@ function sanitizeState(input) {
     fontFamilyId: sanitizeFontFamily(input?.fontFamilyId),
     winnerAnimationMode: sanitizeWinnerAnimationMode(input?.winnerAnimationMode),
     soundMuted: sanitizeSoundMuted(input?.soundMuted),
+    reduceMotion: sanitizeReduceMotion(input?.reduceMotion),
+    roundMode,
+    roundCycleRemainingIds,
     retrySliceEnabled: retryEnabled,
     retrySlicePct: retryPct,
     retrySliceColor: sanitizeRetrySliceColor(input?.retrySliceColor),
@@ -3624,6 +4804,7 @@ function sanitizeState(input) {
 }
 
 function saveState() {
+  state = sanitizeState(state);
   const payload = JSON.stringify({
     version: CONFIG_VERSION,
     spinDurationMinSec: sanitizeSpinDurationValue(state.spinDurationMinSec),
@@ -3635,6 +4816,9 @@ function saveState() {
     fontFamilyId: sanitizeFontFamily(state.fontFamilyId),
     winnerAnimationMode: sanitizeWinnerAnimationMode(state.winnerAnimationMode),
     soundMuted: sanitizeSoundMuted(state.soundMuted),
+    reduceMotion: sanitizeReduceMotion(state.reduceMotion),
+    roundMode: DEFAULT_ROUND_MODE,
+    roundCycleRemainingIds: [],
     retrySliceEnabled: sanitizeRetrySliceEnabled(state.retrySliceEnabled),
     retrySlicePct: sanitizeRetrySlicePct(state.retrySlicePct),
     retrySliceColor: sanitizeRetrySliceColor(state.retrySliceColor),
@@ -3659,14 +4843,14 @@ function saveState() {
   }
 
   if (!wroteCookie) {
-    setMessage("Cookie no disponible. Se guardo en almacenamiento local.", "error");
+    setMessage("Cookie no disponible. Se guardó en almacenamiento local.", "error");
   }
 
   try {
     localStorage.setItem(STORAGE_KEY, payload);
   } catch (_error) {
     if (!wroteCookie) {
-      setMessage("No se pudo guardar la configuracion local.", "error");
+      setMessage("No se pudo guardar la configuración local.", "error");
     }
   }
 }
@@ -3811,60 +4995,136 @@ function sanitizeStats(input) {
   };
 }
 
+function defaultStatsStore(initialStats = null) {
+  return {
+    version: STATS_VERSION,
+    stats: sanitizeStats(initialStats || defaultStats()),
+  };
+}
+
+function sanitizeStatsStore(input) {
+  if (!input || typeof input !== "object") {
+    return defaultStatsStore();
+  }
+
+  if (input?.stats && typeof input.stats === "object") {
+    return {
+      version: STATS_VERSION,
+      stats: sanitizeStats(input.stats),
+    };
+  }
+
+  // Legacy migration: previous versions stored stats grouped by profile id.
+  const rawByProfile = input?.byProfile;
+  if (rawByProfile && typeof rawByProfile === "object" && !Array.isArray(rawByProfile)) {
+    const rawEntries = Object.entries(rawByProfile);
+    if (rawEntries.length === 0) {
+      return defaultStatsStore();
+    }
+    const preferredEntry =
+      rawEntries.find(([key]) => typeof key === "string" && key.trim().toLowerCase() === "default") || rawEntries[0];
+    const preferredStats = preferredEntry ? preferredEntry[1] : defaultStats();
+    return {
+      version: STATS_VERSION,
+      stats: sanitizeStats(preferredStats),
+    };
+  }
+
+  return defaultStatsStore(sanitizeStats(input));
+}
+
+function loadStatsStore() {
+  return stateStoreApi.loadJson(STATS_STORAGE_KEY, sanitizeStatsStore, () => defaultStatsStore());
+}
+
+function saveStatsStore() {
+  statsStore = sanitizeStatsStore(statsStore);
+  stateStoreApi.saveJson(STATS_STORAGE_KEY, statsStore);
+}
+
 function loadStats() {
-  const stored = safeParse(safeLocalGet(STATS_STORAGE_KEY));
-  return sanitizeStats(stored);
+  statsStore = sanitizeStatsStore(statsStore);
+  return sanitizeStats(statsStore.stats);
 }
 
 function saveStats() {
-  const sanitized = sanitizeStats(stats);
-  stats = sanitized;
-  const payload = JSON.stringify({
-    version: STATS_VERSION,
-    lastWinner: sanitized.lastWinner
-      ? {
-          participantId: sanitized.lastWinner.participantId,
-          name: sanitized.lastWinner.name,
-          emoji: sanitized.lastWinner.emoji,
-          color: sanitized.lastWinner.color,
-          wonAt: sanitized.lastWinner.wonAt,
-        }
-      : null,
-    streak: sanitized.streak
-      ? {
-          participantId: sanitized.streak.participantId,
-          count: sanitized.streak.count,
-        }
-      : null,
-    bestStreak: sanitized.bestStreak
-      ? {
-          participantId: sanitized.bestStreak.participantId,
-          count: sanitized.bestStreak.count,
-          snapshot: {
-            name: sanitized.bestStreak.snapshot.name,
-            emoji: sanitized.bestStreak.snapshot.emoji,
-            color: sanitized.bestStreak.snapshot.color,
-          },
-          achievedAt: sanitized.bestStreak.achievedAt,
-        }
-      : null,
-    totals: sanitized.totals.map((entry) => ({
-      participantId: entry.participantId,
-      count: entry.count,
-      snapshot: {
-        name: entry.snapshot.name,
-        emoji: entry.snapshot.emoji,
-        color: entry.snapshot.color,
-      },
-      lastSeenAt: entry.lastSeenAt,
-    })),
-  });
+  stats = sanitizeStats(stats);
+  statsStore = sanitizeStatsStore(statsStore);
+  statsStore.stats = sanitizeStats(stats);
+  saveStatsStore();
+}
 
-  try {
-    localStorage.setItem(STATS_STORAGE_KEY, payload);
-  } catch (_error) {
-    // Ignore quota errors to avoid interrupting the spin flow.
+function defaultSpinHistory() {
+  return {
+    version: SPIN_HISTORY_VERSION,
+    entries: [],
+  };
+}
+
+function sanitizeSpinHistory(input) {
+  if (!input || typeof input !== "object") {
+    return defaultSpinHistory();
   }
+  const rawEntries = Array.isArray(input.entries) ? input.entries : [];
+  const entries = rawEntries
+    .map((entry, index) => ({
+      id:
+        typeof entry?.id === "string" && entry.id.trim()
+          ? entry.id.trim()
+          : `spin_${Math.max(0, index + 1)}`,
+      timestamp: Math.max(0, Math.round(Number(entry?.timestamp) || 0)),
+      winnerParticipantId: sanitizeStatsParticipantId(entry?.winnerParticipantId),
+      winnerName: normalizeName(entry?.winnerName, index),
+      winnerEmoji: sanitizeEmoji(entry?.winnerEmoji, index),
+      winnerColor: sanitizeColor(entry?.winnerColor, index),
+      configSnapshot:
+        entry?.configSnapshot && typeof entry.configSnapshot === "object"
+          ? sanitizeState(entry.configSnapshot)
+          : null,
+    }))
+    .filter((entry) => entry.winnerParticipantId)
+    .slice(-MAX_HISTORY_ENTRIES);
+
+  return {
+    version: SPIN_HISTORY_VERSION,
+    entries,
+  };
+}
+
+function loadSpinHistory() {
+  return stateStoreApi.loadJson(SPIN_HISTORY_STORAGE_KEY, sanitizeSpinHistory, defaultSpinHistory);
+}
+
+function saveSpinHistory() {
+  spinHistory = sanitizeSpinHistory(spinHistory);
+  stateStoreApi.saveJson(SPIN_HISTORY_STORAGE_KEY, spinHistory);
+}
+
+function getHistoryEntries() {
+  return Array.isArray(spinHistory?.entries) ? spinHistory.entries : [];
+}
+
+function recordSpinHistoryWinner(winnerItem) {
+  const participantId = sanitizeStatsParticipantId(winnerItem?.id);
+  if (!participantId) {
+    return;
+  }
+  const entry = {
+    id: `spin_${Date.now()}_${randomInt(1000, 9999)}`,
+    timestamp: Date.now(),
+    winnerParticipantId: participantId,
+    winnerName: normalizeName(winnerItem?.name, 0),
+    winnerEmoji: sanitizeEmoji(winnerItem?.emoji, 0),
+    winnerColor: sanitizeColor(winnerItem?.color, 0),
+    configSnapshot: sanitizeState(state),
+  };
+  const entries = Array.isArray(spinHistory?.entries) ? spinHistory.entries.slice() : [];
+  entries.push(entry);
+  spinHistory = {
+    version: SPIN_HISTORY_VERSION,
+    entries: entries.slice(-MAX_HISTORY_ENTRIES),
+  };
+  saveSpinHistory();
 }
 
 function recordWinner(winnerItem) {
@@ -3936,6 +5196,54 @@ function recordWinner(winnerItem) {
   renderStats();
 }
 
+function createFallbackStateStoreApi() {
+  return {
+    readRaw(key) {
+      try {
+        return localStorage.getItem(key);
+      } catch (_error) {
+        return null;
+      }
+    },
+    parseRaw(rawValue) {
+      if (!rawValue || typeof rawValue !== "string") {
+        return null;
+      }
+      try {
+        return JSON.parse(decodeURIComponent(rawValue));
+      } catch (_firstError) {
+        try {
+          return JSON.parse(rawValue);
+        } catch (_secondError) {
+          return null;
+        }
+      }
+    },
+    loadJson(key, sanitizeFn, fallbackFactory) {
+      const parsed = this.parseRaw(this.readRaw(key));
+      if (parsed === null) {
+        return typeof fallbackFactory === "function" ? fallbackFactory() : fallbackFactory;
+      }
+      if (typeof sanitizeFn !== "function") {
+        return parsed;
+      }
+      try {
+        return sanitizeFn(parsed);
+      } catch (_error) {
+        return typeof fallbackFactory === "function" ? fallbackFactory() : fallbackFactory;
+      }
+    },
+    saveJson(key, value) {
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+        return true;
+      } catch (_error) {
+        return false;
+      }
+    },
+  };
+}
+
 function safeLocalGet(key) {
   try {
     return localStorage.getItem(key);
@@ -3970,6 +5278,25 @@ function safeParse(rawValue) {
 function setControlsDisabled(disabled) {
   refs.addItemButton.disabled = disabled;
   refs.equalizePercentagesButton.disabled = disabled;
+  refs.bulkAddButton.disabled = disabled;
+  refs.bulkParticipantsInput.disabled = disabled;
+  refs.bulkParticipantsClose.disabled = disabled;
+  refs.bulkParticipantsCancel.disabled = disabled;
+  refs.bulkParticipantsConfirm.disabled = disabled;
+  refs.bulkModeAppend.disabled = disabled;
+  refs.bulkModeReplace.disabled = disabled;
+  refs.exportConfigButton.disabled = disabled;
+  refs.exportOptionsClose.disabled = disabled;
+  refs.exportOptionsCancel.disabled = disabled;
+  refs.exportOptionsConfirm.disabled = disabled;
+  refs.exportIncludeConfig.disabled = disabled;
+  refs.exportIncludeStats.disabled = disabled;
+  refs.importConfigButton.disabled = disabled;
+  refs.importOptionsClose.disabled = disabled;
+  refs.importOptionsCancel.disabled = disabled;
+  refs.importOptionsConfirm.disabled = disabled;
+  refs.importIncludeConfig.disabled = disabled;
+  refs.importIncludeStats.disabled = disabled;
   refs.resetButton.disabled = disabled;
   refs.resetConfirmCancel.disabled = disabled;
   refs.statsPanelToggle.disabled = disabled;
@@ -3989,6 +5316,15 @@ function setControlsDisabled(disabled) {
   if (disabled && !refs.statsModal.hidden) {
     closeStatsModal(false);
   }
+  if (disabled && !refs.bulkParticipantsModal.hidden) {
+    closeBulkParticipantsModal(false);
+  }
+  if (disabled && !refs.exportOptionsModal.hidden) {
+    closeExportOptionsModal(false);
+  }
+  if (disabled && !refs.importOptionsModal.hidden) {
+    closeImportOptionsModal(false);
+  }
   refs.durationRangeMin.disabled = disabled;
   refs.durationRangeMax.disabled = disabled;
   refs.durationMinNumber.disabled = disabled;
@@ -3997,8 +5333,18 @@ function setControlsDisabled(disabled) {
   refs.emojiDisplaySelect.disabled = disabled;
   refs.textPositionRange.disabled = disabled;
   refs.fontSizeRange.disabled = disabled;
+  refs.autoTextTuneButton.disabled = disabled;
   refs.fontFamilySelect.disabled = disabled;
+  if (refs.fontPicker instanceof HTMLDetailsElement && refs.fontPickerSummary instanceof HTMLElement) {
+    refs.fontPicker.classList.toggle("is-disabled", disabled);
+    refs.fontPickerSummary.setAttribute("aria-disabled", String(disabled));
+    refs.fontPickerSummary.tabIndex = disabled ? -1 : 0;
+    if (disabled && refs.fontPicker.open) {
+      refs.fontPicker.open = false;
+    }
+  }
   refs.winAnimationSelect.disabled = disabled;
+  refs.reduceMotionToggle.disabled = disabled;
   updateResetConfirmAcceptState();
   renderItemList();
 }
@@ -4009,6 +5355,17 @@ function setMessage(text, type = "") {
   if (type) {
     refs.formMessage.classList.add(type);
   }
+}
+
+function isEditableTarget(target) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  const tagName = target.tagName.toLowerCase();
+  if (tagName === "input" || tagName === "textarea" || tagName === "select") {
+    return true;
+  }
+  return target.isContentEditable;
 }
 
 function sanitizeSpinDurationValue(value) {
@@ -4088,6 +5445,37 @@ function sanitizeParticipantHidden(value) {
 
 function sanitizeSoundMuted(value) {
   return value === true;
+}
+
+function sanitizeReduceMotion(value) {
+  return value === true;
+}
+
+function sanitizeRoundMode(value) {
+  if (typeof value === "string" && ROUND_MODE_VALUES.has(value)) {
+    return value;
+  }
+  return DEFAULT_ROUND_MODE;
+}
+
+function sanitizeRoundCycleRemainingIds(rawValue, items = state.items) {
+  const visibleIds = new Set(
+    getVisibleItems(items).map((item) => sanitizeStatsParticipantId(item?.id)).filter(Boolean),
+  );
+  if (!Array.isArray(rawValue) || rawValue.length === 0 || visibleIds.size === 0) {
+    return [];
+  }
+  const deduped = [];
+  const seen = new Set();
+  rawValue.forEach((entry) => {
+    const id = sanitizeStatsParticipantId(entry);
+    if (!id || seen.has(id) || !visibleIds.has(id)) {
+      return;
+    }
+    seen.add(id);
+    deduped.push(id);
+  });
+  return deduped;
 }
 
 function sanitizeRetrySliceEnabled(value) {
@@ -4789,7 +6177,7 @@ function spawnEmojiWinnerDrops(emoji) {
 }
 
 function spawnArgentinaEasterEggDrops() {
-  const profile = WINNER_EFFECT_PROFILE;
+  const profile = winnerEffectProfile;
   const dropCount = clamp(Math.round(96 * profile.scale), 62, 132);
   const lanes = 9;
   const laneWidthPct = 100 / lanes;
@@ -4852,7 +6240,7 @@ function spawnArgentinaEasterEggDrops() {
 }
 
 function spawnEmojiWinnerDropsExtreme(emoji) {
-  const profile = WINNER_EFFECT_PROFILE;
+  const profile = winnerEffectProfile;
   let maxDropMs = 0;
   const burstCount = profile.extremeBurstCount;
   const fragment = document.createDocumentFragment();
@@ -4897,7 +6285,7 @@ function getTrackedCursorPosition() {
 }
 
 function spawnEmojiHoseDrops(emoji) {
-  const profile = WINNER_EFFECT_PROFILE;
+  const profile = winnerEffectProfile;
   if (winnerEmojiHoseRafId !== null) {
     cancelAnimationFrame(winnerEmojiHoseRafId);
     winnerEmojiHoseRafId = null;
@@ -4920,10 +6308,20 @@ function spawnEmojiHoseDrops(emoji) {
   const emissionDurationMs = profile.hoseEmissionDurationMs;
   const hoseLifetimeMs = profile.hoseLifetimeMs;
   const particles = [];
+  let liveParticleCount = 0;
   let elapsedMs = 0;
   let spawnCarry = 0;
   let sweepPhase = 0;
   let accumulatedMs = 0;
+
+  const deactivateParticle = (particle) => {
+    if (!particle.alive) {
+      return;
+    }
+    particle.alive = false;
+    liveParticleCount = Math.max(0, liveParticleCount - 1);
+    particle.node.remove();
+  };
 
   let lastTimestamp = performance.now();
   const step = (timestamp) => {
@@ -4964,7 +6362,7 @@ function spawnEmojiHoseDrops(emoji) {
       const spawnCount = Math.min(plannedCount, profile.hoseSpawnCapPerStep);
       const origin = getTrackedCursorPosition();
       const fragment = document.createDocumentFragment();
-      for (let i = 0; i < spawnCount && particles.length < maxParticles; i += 1) {
+      for (let i = 0; i < spawnCount && liveParticleCount < maxParticles; i += 1) {
         const drop = document.createElement("span");
         drop.className = "winner-emoji-hose-drop";
         drop.textContent = emoji;
@@ -4991,6 +6389,7 @@ function spawnEmojiHoseDrops(emoji) {
         drop.style.transform = `translate3d(${particle.x}px, ${particle.y}px, 0) rotate(${particle.rot}deg)`;
         fragment.append(drop);
         particles.push(particle);
+        liveParticleCount += 1;
       }
       refs.emojiRain.append(fragment);
     } else {
@@ -5007,8 +6406,7 @@ function spawnEmojiHoseDrops(emoji) {
       }
       particle.ageMs += deltaSec * 1000;
       if (particle.ageMs >= particle.lifeMs) {
-        particle.alive = false;
-        particle.node.remove();
+        deactivateParticle(particle);
         continue;
       }
 
@@ -5050,10 +6448,7 @@ function spawnEmojiHoseDrops(emoji) {
 
     if (globalFade <= 0.001 && aliveCount > 0) {
       for (let i = 0; i < particles.length; i += 1) {
-        if (particles[i].alive) {
-          particles[i].alive = false;
-          particles[i].node.remove();
-        }
+        deactivateParticle(particles[i]);
       }
       aliveCount = 0;
     }
@@ -5589,7 +6984,7 @@ function spawnStarDrops() {
 }
 
 function spawnFireworksDrops() {
-  const profile = WINNER_EFFECT_PROFILE;
+  const profile = winnerEffectProfile;
   if (winnerFireworkTimeoutIds.length > 0) {
     winnerFireworkTimeoutIds.forEach((timeoutId) => {
       clearTimeout(timeoutId);
@@ -5778,6 +7173,9 @@ function spawnRetryFailureDrops() {
 function triggerRetryFailureCelebration() {
   clearWinnerCelebrationVisuals();
   refs.resultText.classList.add("result-failure-retry");
+  if (shouldReduceMotion()) {
+    return 380;
+  }
   const maxDropMs = spawnRetryFailureDrops();
   const celebrationDurationMs = Math.ceil(maxDropMs) + 240;
   celebrationTimeoutId = window.setTimeout(() => {
@@ -5791,6 +7189,13 @@ function triggerWinnerCelebration(winnerItem) {
   const winnerMode = resolveWinnerAnimationModeForParticipant(winnerItem);
 
   clearWinnerCelebrationVisuals();
+  if (shouldReduceMotion()) {
+    refs.resultText.classList.add("winner-announce");
+    celebrationTimeoutId = window.setTimeout(() => {
+      clearWinnerCelebrationVisuals();
+    }, 420);
+    return 420;
+  }
 
   let maxDropMs = 0;
   if (winnerMode === "cartaBlanca") {

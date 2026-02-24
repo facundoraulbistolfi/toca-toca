@@ -1,41 +1,80 @@
 # Changelog
 
-## Version actual: v1.1.0
+## Versión actual: v1.2.0
 
-Fecha de corte: 23 de febrero de 2026
+Fecha de corte: 24 de febrero de 2026
+
+## v1.2.0 - 2026-02-24
+
+### Producto y UX
+
+- Se eliminó la feature de perfiles para simplificar el flujo y evitar solapamiento con importar/exportar.
+- Se eliminó el modo de ronda temporalmente para repensar la experiencia.
+- Nueva sección dedicada de `Participantes` y mejor distribución de acciones generales en `Configuración`.
+- La lista de participantes ahora usa scroll interno y conserva su posición al editar/ocultar.
+
+### Participantes y sorteo
+
+- Carga masiva mediante botón y modal con dos modos:
+  - agregar a la lista actual
+  - reemplazar toda la lista
+- Ajustes en porcentajes para evitar inconsistencias al ocultar/mostrar participantes.
+- Se agregó opción `🎲 Aleatorio` en animación particular por participante.
+
+### Configuración y respaldo
+
+- Importar/exportar con opciones de alcance:
+  - incluir configuración
+  - incluir estadísticas
+- Acciones de respaldo movidas al final de configuraciones.
+- Duración por defecto del giro actualizada a `20..40` segundos.
+
+### Estadísticas e información
+
+- Se eliminó la sección `Frecuencia vs esperado`.
+- `Últimas salidas` pasa a mostrar 10 y queda colapsado por defecto.
+- La tabla acumulada muestra 5 por defecto con opción de expandir.
+- El changelog dentro del modal de información ahora abre colapsado por defecto.
+
+### UI visual y accesibilidad
+
+- Tooltips corregidos para evitar recortes en botones de acciones.
+- Botones de acciones de participantes unificados como iconos con tooltip.
+- Control de reducir animaciones con toggle `🐇 vs 🐢` y correcciones de layout para evitar desplazamientos del modal.
+- Ajustes tipográficos y ortográficos generales (tildes y textos visibles).
 
 ## v1.1.0 - 2026-02-23
 
 ### UI y experiencia
 
 - Botones flotantes superiores unificados visualmente con iconos emoji consistentes.
-- Tooltips visuales al pasar cursor por botones flotantes (configuracion, sonido, estadisticas, informacion).
+- Tooltips visuales al pasar cursor por botones flotantes (configuración, sonido, estadísticas, información).
 - Botones principales de participantes alineados en color/estilo (agregar, igualar porcentajes, restablecer).
 
-### Contacto e informacion
+### Contacto e información
 
-- Seccion `Contacto` integrada en el modal de `Informacion`.
-- Flujo publico de contacto via GitHub Issues:
+- Sección `Contacto` integrada en el modal de `Información`.
+- Flujo público de contacto vía GitHub Issues:
   - `Reportar bug` (template)
   - `Proponer idea` (template)
   - `Ver issues abiertos`
-- Aviso de privacidad visible para evitar compartir datos sensibles en issues publicos.
+- Aviso de privacidad visible para evitar compartir datos sensibles en issues públicos.
 
 ### Changelog y contenido
 
-- El modal de informacion ahora carga el changelog directamente desde `changelog.md`.
+- El modal de información ahora carga el changelog directamente desde `changelog.md`.
 - El bloque de changelog en el modal es scrolleable para evitar crecimiento infinito.
-- Changelog movido al final del modal de informacion.
+- Changelog movido al final del modal de información.
 
-### Configuracion de participantes
+### Configuración de participantes
 
-- Nuevo boton `⚖️ Igualar porcentajes` para distribuir en forma pareja los porcentajes de participantes visibles.
-- Se agregaron validaciones de habilitacion/estado segun cantidad minima visible y giro en curso.
+- Nuevo botón `⚖️ Igualar porcentajes` para distribuir en forma pareja los porcentajes de participantes visibles.
+- Se agregaron validaciones de habilitación/estado según cantidad mínima visible y giro en curso.
 
 ### Animaciones
 
-- Nueva variante de animacion de cartas `Carta blanca (Classic)` con fisica tipo FreeCell:
-  - menos cartas, mas grandes
+- Nueva variante de animación de cartas `Carta blanca (Classic)` con física tipo FreeCell:
+  - menos cartas, más grandes
   - rebotes contra bordes/fondo
   - rastro de movimiento
 - Ajustes de nomenclatura e iconos:
@@ -47,57 +86,57 @@ Fecha de corte: 23 de febrero de 2026
 
 ### Lanzamiento productivo
 
-- Primera version productiva publicada.
+- Primera versión productiva publicada.
 
 ## v0.0.1 - 2026-02-22
 
 ### Base del MVP
 
-- Sitio estatico listo para ejecutar en local y publicar en GitHub Pages.
+- Sitio estático listo para ejecutar en local y publicar en GitHub Pages.
 - Rula interactiva en canvas con giro por click/tap.
-- Persistencia de configuracion por cookie (`tocaTocaConfig`) con fallback en `localStorage`.
+- Persistencia de configuración por cookie (`tocaTocaConfig`) con fallback en `localStorage`.
 
 ### Ajustes de giro
 
-- Duracion aleatoria configurable por rango minimo/maximo (`1..60` segundos).
-- Curva de desaceleracion suave para finalizar sin salto abrupto.
-- Posibilidad de cortar el giro con click mientras esta girando.
+- Duración aleatoria configurable por rango mínimo/máximo (`1..60` segundos).
+- Curva de desaceleración suave para finalizar sin salto abrupto.
+- Posibilidad de cortar el giro con click mientras está girando.
 
-### Personalizacion de rula
+### Personalización de rula
 
-- Disposicion de nombres configurable (radial, tangencial, horizontal).
-- Posicion del texto en la seccion configurable.
-- Tamano de fuente configurable.
-- Selector de familia tipografica estilo casino.
+- Disposición de nombres configurable (radial, tangencial, horizontal).
+- Posición del texto en la sección configurable.
+- Tamaño de fuente configurable.
+- Selector de familia tipográfica estilo casino.
 - Modo de emoji en nombre configurable (inicio/final/ambos/ninguno).
 
 ### Participantes
 
-- Edicion por fila: emoji, nombre, color, porcentaje, animacion, borrar.
-- Limite de nombre por participante: `10` caracteres.
-- Selector de color en modal: grilla por paletas, RGB y codigo hex.
-- Selector de emoji en modal con secciones, busqueda y random.
-- Catalogo completo de emojis basado en Unicode/CLDR, con nombres reales en espanol e ingles.
-- Busqueda de emojis por texto parcial y tokens en ES/EN (incluye aliases oficiales).
-- Dataset local `emoji-catalog.js` para uso offline y script de regeneracion oficial.
-- Selector de animacion por participante:
-  - puede heredar la animacion general
-  - o usar una animacion particular
+- Edición por fila: emoji, nombre, color, porcentaje, animación, borrar.
+- Límite de nombre por participante: `10` caracteres.
+- Selector de color en modal: grilla por paletas, RGB y código hex.
+- Selector de emoji en modal con secciones, búsqueda y random.
+- Catálogo completo de emojis basado en Unicode/CLDR, con nombres reales en español e inglés.
+- Búsqueda de emojis por texto parcial y tokens en ES/EN (incluye aliases oficiales).
+- Dataset local `emoji-catalog.js` para uso offline y script de regeneración oficial.
+- Selector de animación por participante:
+  - puede heredar la animación general
+  - o usar una animación particular
 - Nuevo toggle de visibilidad por participante (`👁` / `🙈`):
   - permite ocultarlo de la rula sin borrarlo
-  - si esta oculto, no participa del sorteo ni puede ganar
+  - si está oculto, no participa del sorteo ni puede ganar
   - su porcentaje queda bloqueado
-  - se exige minimo de 2 participantes visibles
+  - se exige mínimo de 2 participantes visibles
 
 ### Animaciones y efectos al ganar
 
 - Selector general de animaciones con emoji + nombre.
-- Efectos disponibles: aleatorio, lluvia clasica, lluvia extrema, manguera, fuegos artificiales, carta blanca, rebote emoji, confeti, estrellas y pulso neon.
+- Efectos disponibles: aleatorio, lluvia clásica, lluvia extrema, manguera, fuegos artificiales, carta blanca, rebote emoji, confeti, estrellas y pulso neón.
 - Sonido de pulso del puntero durante el giro.
-- Sonido de aplausos/ovacion al finalizar.
+- Sonido de aplausos/ovación al finalizar.
 
 ### UI/UX
 
-- Panel lateral de configuracion y modal de informacion.
+- Panel lateral de configuración y modal de información.
 - Ajustes visuales para tema casino/madera y mejoras de contraste.
-- Ensanche del panel de configuracion para acomodar controles extra por participante.
+- Ensanche del panel de configuración para acomodar controles extra por participante.
