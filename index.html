@@ -18,11 +18,11 @@
       id="configPanelToggle"
       class="config-panel-toggle"
       type="button"
-      data-tooltip="Configuracion"
+      data-tooltip="Configuración"
       aria-controls="configPanel"
       aria-expanded="false"
-      aria-label="Abrir configuracion"
-      title="Abrir configuracion"
+      aria-label="Abrir configuración"
+      title="Abrir configuración"
     >
       ⚙️
     </button>
@@ -38,14 +38,25 @@
       🔊
     </button>
     <button
+      id="participantsPanelToggle"
+      class="participants-panel-toggle"
+      type="button"
+      data-tooltip="Participantes"
+      aria-controls="participantsPanel"
+      aria-expanded="false"
+      aria-label="Abrir participantes"
+    >
+      👥
+    </button>
+    <button
       id="statsPanelToggle"
       class="stats-panel-toggle"
       type="button"
-      data-tooltip="Estadisticas"
+      data-tooltip="Estadísticas"
       aria-controls="statsModal"
       aria-expanded="false"
-      aria-label="Abrir estadisticas"
-      title="Abrir estadisticas"
+      aria-label="Abrir estadísticas"
+      title="Abrir estadísticas"
     >
       📊
     </button>
@@ -53,11 +64,11 @@
       id="infoPanelToggle"
       class="info-panel-toggle"
       type="button"
-      data-tooltip="Informacion"
+      data-tooltip="Información"
       aria-controls="infoModal"
       aria-expanded="false"
-      aria-label="Abrir informacion"
-      title="Abrir informacion"
+      aria-label="Abrir información"
+      title="Abrir información"
     >
       ℹ️
     </button>
@@ -75,7 +86,7 @@
             id="wheelCanvas"
             width="520"
             height="520"
-            aria-label="Rula de seleccion de nombres"
+            aria-label="Rula de selección de nombres"
           ></canvas>
           <div id="wheelPointer" class="pointer" aria-hidden="true"></div>
         </div>
@@ -88,23 +99,23 @@
 
     <aside id="configPanel" class="controls-card side-panel" aria-hidden="true">
       <header class="side-panel-header">
-        <h2>Configuracion</h2>
+        <h2>Configuración</h2>
         <button
           id="configPanelClose"
           class="side-panel-close"
           type="button"
-          aria-label="Cerrar configuracion"
-          title="Cerrar configuracion"
+          aria-label="Cerrar configuración"
+          title="Cerrar configuración"
         >
           ✕
         </button>
       </header>
       <div class="config-body">
-        <details class="panel-settings" id="wheelSettings" open>
-          <summary>Ajustes de rula</summary>
+        <section class="panel-settings panel-settings-static">
+          <h3 class="panel-settings-title">Configuración de rula</h3>
 
           <div class="duration-control">
-            <label id="durationLabel" for="durationRangeMin">Duracion aleatoria: 5s - 8s</label>
+            <label id="durationLabel" for="durationRangeMin">Duración aleatoria: 20s - 40s</label>
             <div class="duration-dual-slider">
               <input
                 id="durationRangeMin"
@@ -112,8 +123,8 @@
                 min="1"
                 max="60"
                 step="1"
-                value="5"
-                aria-label="Duracion minima de giro"
+                value="20"
+                aria-label="Duración mínima de giro"
               />
               <input
                 id="durationRangeMax"
@@ -121,40 +132,40 @@
                 min="1"
                 max="60"
                 step="1"
-                value="8"
-                aria-label="Duracion maxima de giro"
+                value="40"
+                aria-label="Duración máxima de giro"
               />
             </div>
             <div class="duration-inputs">
               <label class="duration-number-field" for="durationMinNumber">
-                <span>Minimo (s)</span>
+                <span>Mínimo (s)</span>
                 <input
                   id="durationMinNumber"
                   type="number"
                   min="1"
                   max="60"
                   step="1"
-                  value="5"
-                  aria-label="Duracion minima en segundos"
+                  value="20"
+                  aria-label="Duración mínima en segundos"
                 />
               </label>
               <label class="duration-number-field" for="durationMaxNumber">
-                <span>Maximo (s)</span>
+                <span>Máximo (s)</span>
                 <input
                   id="durationMaxNumber"
                   type="number"
                   min="1"
                   max="60"
                   step="1"
-                  value="8"
-                  aria-label="Duracion maxima en segundos"
+                  value="40"
+                  aria-label="Duración máxima en segundos"
                 />
               </label>
             </div>
           </div>
 
           <div class="text-layout-control">
-            <label for="textLayoutSelect">Disposicion de nombres</label>
+            <label for="textLayoutSelect">Disposición de nombres</label>
             <select id="textLayoutSelect">
               <option value="radial">Radial (centro hacia afuera)</option>
               <option value="tangent">Tangencial (siguiendo el aro)</option>
@@ -172,33 +183,54 @@
             </select>
           </div>
 
-          <div class="text-layout-control">
-            <label id="textPositionLabel" for="textPositionRange">Posicion en la seccion: 54%</label>
-            <input
-              id="textPositionRange"
-              type="range"
-              min="30"
-              max="80"
-              step="1"
-              value="54"
-            />
+          <div class="text-layout-control text-controls-panel">
+            <h4 class="text-controls-title">Tamaño y sección</h4>
+            <div class="text-controls-wrap">
+              <div class="text-controls-row">
+                <div class="text-slider-group">
+                  <label id="textPositionLabel" for="textPositionRange">Posición en la sección: 54%</label>
+                  <input
+                    id="textPositionRange"
+                    type="range"
+                    min="30"
+                    max="80"
+                    step="1"
+                    value="54"
+                  />
+                </div>
+                <div class="text-slider-group">
+                  <label id="fontSizeLabel" for="fontSizeRange">Tamaño de fuente: 26px</label>
+                  <input id="fontSizeRange" type="range" min="12" max="30" step="1" value="26" />
+                </div>
+              </div>
+              <div class="text-controls-actions">
+                <button
+                  id="autoTextTuneButton"
+                  class="auto-text-tune-button"
+                  type="button"
+                  data-tooltip="Autoajustar posición y tamaño"
+                  aria-label="Autoajustar posición y tamaño del texto"
+                >
+                  🪄
+                </button>
+              </div>
+            </div>
           </div>
 
           <div class="text-layout-control">
-            <label id="fontSizeLabel" for="fontSizeRange">Tamano de fuente: 26px</label>
-            <input id="fontSizeRange" type="range" min="12" max="30" step="1" value="26" />
+            <label for="fontPickerSummary">Fuente de la rula</label>
+            <details id="fontPicker" class="font-picker">
+              <summary id="fontPickerSummary" aria-label="Fuente del texto en la rula"></summary>
+              <div id="fontPickerOptions" class="font-picker-options" role="listbox" aria-label="Opciones de fuente"></div>
+            </details>
+            <select id="fontFamilySelect" aria-label="Fuente del texto en la rula" hidden></select>
           </div>
 
           <div class="text-layout-control">
-            <label for="fontFamilySelect">Fuente de la rula</label>
-            <select id="fontFamilySelect" aria-label="Fuente del texto en la rula"></select>
-          </div>
-
-          <div class="text-layout-control">
-            <label for="winAnimationSelect">Animacion al ganar</label>
-            <select id="winAnimationSelect" aria-label="Animacion al ganar">
+            <label for="winAnimationSelect">Animación al ganar</label>
+            <select id="winAnimationSelect" aria-label="Animación al ganar">
               <option value="random">🎲 Aleatorio</option>
-              <option value="emojiRain">🌧️ Lluvia de emojis (clasica)</option>
+              <option value="emojiRain">🌧️ Lluvia de emojis (clásica)</option>
               <option value="emojiRainExtreme">🌊 Lluvia de emojis (extrema)</option>
               <option value="emojiHose">🚿 Manguera de emojis</option>
               <option value="fuegosArtificiales">🎆 Fuegos artificiales</option>
@@ -207,24 +239,120 @@
               <option value="emojiBounce">🪀 Rebote emoji</option>
               <option value="confeti">🎉 Confeti</option>
               <option value="estrellas">✨ Estrellas</option>
-              <option value="neonPulse">⚡ Pulso neon</option>
+              <option value="neonPulse">⚡ Pulso neón</option>
             </select>
+            <p class="hint">Después podés configurar una animación individual para cada jugador en Participantes.</p>
           </div>
-        </details>
 
-        <details class="panel-settings participants-settings" open>
-          <summary>Participantes</summary>
-          <p class="hint">Nombre, emoji, color, porcentaje, animacion, visibilidad y seccion Tira otra vez</p>
-          <div id="itemList" class="item-list"></div>
-
-          <div class="actions">
-            <button id="addItemButton" type="button">➕ Agregar participante</button>
-            <button id="equalizePercentagesButton" type="button">⚖️ Igualar porcentajes</button>
-            <button id="resetButton" class="secondary" type="button">♻️ Restablecer</button>
+          <div class="text-layout-control reduce-motion-control">
+            <div class="reduce-motion-heading">
+              <label for="reduceMotionToggle">Reducir animaciones</label>
+              <span class="reduce-motion-joke" aria-hidden="true">🐇 vs 🐢</span>
+            </div>
+            <label class="animal-toggle" for="reduceMotionToggle">
+              <span class="animal-toggle-option animal-fast" aria-hidden="true">🐇</span>
+              <input
+                id="reduceMotionToggle"
+                type="checkbox"
+                aria-label="Reducir animaciones (tortuga) o animaciones completas (conejo)"
+              />
+              <span class="animal-toggle-track" aria-hidden="true">
+                <span class="animal-toggle-thumb"></span>
+              </span>
+              <span class="animal-toggle-option animal-slow" aria-hidden="true">🐢</span>
+            </label>
           </div>
-        </details>
+        </section>
+
+        <section class="panel-settings panel-settings-static">
+          <h3 class="panel-settings-title">Datos y respaldo</h3>
+          <p class="hint">Acciones generales de configuración y respaldo.</p>
+          <div class="actions actions-icon">
+            <button
+              id="exportConfigButton"
+              class="action-icon-button"
+              type="button"
+              data-tooltip="Exportar respaldo"
+              aria-label="Exportar respaldo"
+            >
+              💾
+            </button>
+            <button
+              id="importConfigButton"
+              class="action-icon-button"
+              type="button"
+              data-tooltip="Importar configuración"
+              aria-label="Importar configuración"
+            >
+              📂
+            </button>
+            <button
+              id="resetButton"
+              class="secondary action-icon-button"
+              type="button"
+              data-tooltip="Restablecer"
+              aria-label="Restablecer"
+            >
+              🧹
+            </button>
+          </div>
+          <input id="importConfigInput" type="file" accept="application/json,.json" hidden />
+        </section>
       </div>
+    </aside>
+    <aside id="participantsPanel" class="controls-card side-panel" aria-hidden="true">
+      <header class="side-panel-header">
+        <h2>Participantes</h2>
+        <button
+          id="participantsPanelClose"
+          class="side-panel-close"
+          type="button"
+          aria-label="Cerrar participantes"
+          title="Cerrar participantes"
+        >
+          ❌
+        </button>
+      </header>
+      <div class="config-body participants-panel-body">
+        <section class="panel-settings participants-settings">
+          <h3 class="panel-settings-title">Participantes</h3>
+          <p class="hint">Nombre, emoji, color, porcentaje, animación, visibilidad y sección Tira otra vez</p>
 
+          <div class="actions actions-icon">
+            <button
+              id="addItemButton"
+              class="action-icon-button"
+              type="button"
+              data-tooltip="Agregar participante"
+              aria-label="Agregar participante"
+            >
+              ➕
+            </button>
+            <button
+              id="bulkAddButton"
+              class="action-icon-button"
+              type="button"
+              data-tooltip="Carga masiva"
+              aria-label="Carga masiva"
+            >
+              📥
+            </button>
+            <button
+              id="equalizePercentagesButton"
+              class="action-icon-button"
+              type="button"
+              data-tooltip="Igualar porcentajes"
+              aria-label="Igualar porcentajes"
+            >
+              ⚖️
+            </button>
+          </div>
+
+          <div class="participants-list-scroll">
+            <div id="itemList" class="item-list"></div>
+          </div>
+        </section>
+      </div>
       <p id="formMessage" class="form-message" role="status" aria-live="polite"></p>
     </aside>
     <div id="emojiRain" class="emoji-rain" aria-hidden="true"></div>
@@ -268,7 +396,7 @@
           <code id="colorHexValue" class="color-hex-value">#000000</code>
         </div>
         <label class="color-code-field" for="colorHexInput">
-          <span>Codigo hexadecimal</span>
+          <span>Código hexadecimal</span>
           <input
             id="colorHexInput"
             type="text"
@@ -278,7 +406,7 @@
             aria-label="Color en formato hexadecimal"
           />
         </label>
-        <p class="color-modal-hint">Elegi por grilla, RGB o codigo.</p>
+        <p class="color-modal-hint">Elegí por grilla, RGB o código.</p>
         <label class="color-palette-field" for="colorPaletteSelect">
           <span>Paleta</span>
           <select id="colorPaletteSelect" aria-label="Seleccionar paleta de colores"></select>
@@ -351,7 +479,7 @@
             type="text"
             maxlength="16"
             spellcheck="false"
-            placeholder="Filtrar por emoji, nombre o categoria"
+            placeholder="Filtrar por emoji, nombre o categoría"
             aria-label="Buscar emoji"
           />
         </label>
@@ -365,20 +493,20 @@
           aria-label="Emoji personalizado"
           autocomplete="off"
         />
-        <div id="emojiSections" class="emoji-sections" aria-label="Lista de emojis por categoria"></div>
+        <div id="emojiSections" class="emoji-sections" aria-label="Lista de emojis por categoría"></div>
       </section>
     </div>
     <div id="infoModal" class="color-modal info-modal" hidden>
       <div class="color-modal-backdrop" data-close-info-modal></div>
       <section class="color-modal-content info-modal-content" role="dialog" aria-modal="true" aria-labelledby="infoModalTitle">
         <header class="color-modal-header">
-          <h3 id="infoModalTitle">Informacion</h3>
+          <h3 id="infoModalTitle">Información</h3>
           <button
             id="infoModalClose"
             class="color-modal-close"
             type="button"
-            aria-label="Cerrar informacion"
-            title="Cerrar informacion"
+            aria-label="Cerrar información"
+            title="Cerrar información"
           >
             ✕
           </button>
@@ -387,7 +515,7 @@
         <section class="info-block">
           <h4>Toca Toca</h4>
           <p>Rula de nombres personalizable.</p>
-          <p><strong>Version actual:</strong> <span id="infoVersionText">v1.1.0</span></p>
+          <p><strong>Versión actual:</strong> <span id="infoVersionText">v1.2.0</span></p>
           <p>
             Creado por
             <a href="https://github.com/facundoraulbistolfi" target="_blank" rel="noopener noreferrer">Facundo Bistolfi</a>
@@ -411,9 +539,9 @@
 
         <section class="info-block contact-info-block">
           <h4>💬 Contacto</h4>
-          <p>Si queres reportar algo o proponer mejoras, usa uno de estos canales.</p>
+          <p>Si querés reportar algo o proponer mejoras, usá uno de estos canales.</p>
           <p class="contact-privacy-note">
-            ⚠️ Los issues son publicos. No compartas datos personales o sensibles.
+            ⚠️ Los issues son públicos. No compartas datos personales o sensibles.
           </p>
           <div class="contact-actions">
             <a
@@ -445,10 +573,12 @@
         </section>
 
         <section class="info-block changelog-block">
-          <h4>📝 Changelog</h4>
-          <ul id="changelogList" class="changelog-list">
-            <li class="changelog-status-item">Cargando changelog...</li>
-          </ul>
+          <details id="infoChangelogDetails" class="info-changelog-details">
+            <summary class="info-changelog-summary">📝 Changelog</summary>
+            <ul id="changelogList" class="changelog-list">
+              <li class="changelog-status-item">Cargando changelog...</li>
+            </ul>
+          </details>
         </section>
       </section>
     </div>
@@ -456,20 +586,20 @@
       <div class="color-modal-backdrop" data-close-stats-modal></div>
       <section class="color-modal-content stats-modal-content" role="dialog" aria-modal="true" aria-labelledby="statsModalTitle">
         <header class="color-modal-header">
-          <h3 id="statsModalTitle">Estadisticas</h3>
+          <h3 id="statsModalTitle">Estadísticas</h3>
           <button
             id="statsModalClose"
             class="color-modal-close"
             type="button"
-            aria-label="Cerrar estadisticas"
-            title="Cerrar estadisticas"
+            aria-label="Cerrar estadísticas"
+            title="Cerrar estadísticas"
           >
             ✕
           </button>
         </header>
         <div class="stats-summary-grid">
           <section class="stats-summary-card">
-            <h4>Ultimo en salir</h4>
+            <h4>Último en salir</h4>
             <div id="statsLastWinner" class="stats-last-winner-slot">
               <div class="stats-player-chip stats-player-chip-empty">
                 <span class="stats-player-emoji" aria-hidden="true">🕳️</span>
@@ -479,7 +609,7 @@
             <p id="statsLastWinnerStatus" class="stats-last-winner-status">Sin historial de salidas.</p>
           </section>
           <section class="stats-summary-card">
-            <h4>Racha mas larga</h4>
+            <h4>Racha más larga</h4>
             <div id="statsLongestStreak" class="stats-streak-slot">
               <p class="stats-streak">Sin rachas registradas.</p>
             </div>
@@ -489,7 +619,7 @@
           <header class="stats-table-header">
             <h4>Acumulado por jugador</h4>
           </header>
-          <p id="statsEmptyState" class="stats-empty-state">Todavia no hay historial de salidas.</p>
+          <p id="statsEmptyState" class="stats-empty-state">Todavía no hay historial de salidas.</p>
           <div id="statsTableWrap" class="stats-table-wrap" hidden>
             <table class="stats-table">
               <thead>
@@ -502,7 +632,33 @@
               <tbody id="statsTableBody"></tbody>
             </table>
           </div>
+          <button
+            id="statsTotalsToggle"
+            class="stats-table-more-button"
+            type="button"
+            hidden
+            aria-expanded="false"
+          >
+            Ver más
+          </button>
         </section>
+        <details id="statsRecentDetails" class="stats-table-section stats-collapsible-section">
+          <summary class="stats-collapsible-summary">
+            <span class="stats-collapsible-title">Últimas 10 salidas</span>
+          </summary>
+          <p id="statsRecentEmptyState" class="stats-empty-state">Todavía no hay salidas registradas.</p>
+          <div id="statsRecentWrap" class="stats-table-wrap" hidden>
+            <table class="stats-table">
+              <thead>
+                <tr>
+                  <th scope="col">Fecha</th>
+                  <th scope="col">Ganador</th>
+                </tr>
+              </thead>
+              <tbody id="statsRecentBody"></tbody>
+            </table>
+          </div>
+        </details>
       </section>
     </div>
     <div id="resetConfirmModal" class="color-modal reset-confirm-modal" hidden>
@@ -514,20 +670,20 @@
             id="resetConfirmClose"
             class="color-modal-close"
             type="button"
-            aria-label="Cerrar confirmacion"
-            title="Cerrar confirmacion"
+            aria-label="Cerrar confirmación"
+            title="Cerrar confirmación"
           >
             ✕
           </button>
         </header>
         <p class="reset-confirm-text">
-          Elegi que queres restablecer.
+          Elegí qué querés restablecer.
         </p>
         <fieldset class="reset-scope-fieldset">
           <legend>Opciones</legend>
           <label class="reset-scope-option" for="resetScopeConfig">
             <input id="resetScopeConfig" type="checkbox" checked />
-            <span>Configuracion</span>
+            <span>Configuración</span>
           </label>
           <label class="reset-scope-option" for="resetScopeUsers">
             <input id="resetScopeUsers" type="checkbox" checked />
@@ -539,11 +695,116 @@
           </label>
         </fieldset>
         <p class="reset-confirm-text">
-          Esta accion no se puede deshacer.
+          Esta acción no se puede deshacer.
         </p>
         <div class="reset-confirm-actions">
           <button id="resetConfirmAccept" type="button">Confirmar</button>
           <button id="resetConfirmCancel" class="secondary" type="button">Volver</button>
+        </div>
+      </section>
+    </div>
+    <div id="bulkParticipantsModal" class="color-modal bulk-modal" hidden>
+      <div class="color-modal-backdrop" data-close-bulk-modal></div>
+      <section class="color-modal-content bulk-modal-content" role="dialog" aria-modal="true" aria-labelledby="bulkParticipantsTitle">
+        <header class="color-modal-header">
+          <h3 id="bulkParticipantsTitle">Carga masiva de participantes</h3>
+          <button
+            id="bulkParticipantsClose"
+            class="color-modal-close"
+            type="button"
+            aria-label="Cerrar carga masiva"
+            title="Cerrar carga masiva"
+          >
+            ❌
+          </button>
+        </header>
+        <fieldset class="bulk-mode-fieldset">
+          <legend>Modo de carga</legend>
+          <label class="bulk-mode-option" for="bulkModeAppend">
+            <input id="bulkModeAppend" name="bulkMode" type="radio" value="append" checked />
+            <span>Agregar a la lista actual</span>
+          </label>
+          <label class="bulk-mode-option" for="bulkModeReplace">
+            <input id="bulkModeReplace" name="bulkMode" type="radio" value="replace" />
+            <span>Reemplazar toda la lista</span>
+          </label>
+        </fieldset>
+        <label class="color-code-field" for="bulkParticipantsInput">
+          <span>Pegá una lista (una línea por participante)</span>
+          <textarea
+            id="bulkParticipantsInput"
+            rows="10"
+            placeholder="😀 Alexei&#10;🖤 Polina&#10;General&#10;Antonida"
+            aria-label="Lista de participantes para carga masiva"
+          ></textarea>
+        </label>
+        <div class="reset-confirm-actions">
+          <button id="bulkParticipantsConfirm" type="button">Aplicar</button>
+          <button id="bulkParticipantsCancel" class="secondary" type="button">Cancelar</button>
+        </div>
+      </section>
+    </div>
+    <div id="exportOptionsModal" class="color-modal bulk-modal" hidden>
+      <div class="color-modal-backdrop" data-close-export-modal></div>
+      <section class="color-modal-content bulk-modal-content" role="dialog" aria-modal="true" aria-labelledby="exportOptionsTitle">
+        <header class="color-modal-header">
+          <h3 id="exportOptionsTitle">Exportar respaldo</h3>
+          <button
+            id="exportOptionsClose"
+            class="color-modal-close"
+            type="button"
+            aria-label="Cerrar opciones de exportación"
+            title="Cerrar opciones de exportación"
+          >
+            ❌
+          </button>
+        </header>
+        <fieldset class="reset-scope-fieldset">
+          <legend>Que incluir</legend>
+          <label class="reset-scope-option" for="exportIncludeConfig">
+            <input id="exportIncludeConfig" type="checkbox" checked />
+            <span>Incluir configuración</span>
+          </label>
+          <label class="reset-scope-option" for="exportIncludeStats">
+            <input id="exportIncludeStats" type="checkbox" checked />
+            <span>Incluir estadísticas</span>
+          </label>
+        </fieldset>
+        <div class="reset-confirm-actions">
+          <button id="exportOptionsConfirm" type="button">Exportar</button>
+          <button id="exportOptionsCancel" class="secondary" type="button">Cancelar</button>
+        </div>
+      </section>
+    </div>
+    <div id="importOptionsModal" class="color-modal bulk-modal" hidden>
+      <div class="color-modal-backdrop" data-close-import-modal></div>
+      <section class="color-modal-content bulk-modal-content" role="dialog" aria-modal="true" aria-labelledby="importOptionsTitle">
+        <header class="color-modal-header">
+          <h3 id="importOptionsTitle">Importar respaldo</h3>
+          <button
+            id="importOptionsClose"
+            class="color-modal-close"
+            type="button"
+            aria-label="Cerrar opciones de importación"
+            title="Cerrar opciones de importación"
+          >
+            ❌
+          </button>
+        </header>
+        <fieldset class="reset-scope-fieldset">
+          <legend>Que aplicar</legend>
+          <label class="reset-scope-option" for="importIncludeConfig">
+            <input id="importIncludeConfig" type="checkbox" checked />
+            <span>Importar configuración (si viene en el archivo)</span>
+          </label>
+          <label class="reset-scope-option" for="importIncludeStats">
+            <input id="importIncludeStats" type="checkbox" checked />
+            <span>Importar estadísticas (si vienen en el archivo)</span>
+          </label>
+        </fieldset>
+        <div class="reset-confirm-actions">
+          <button id="importOptionsConfirm" type="button">Elegir archivo</button>
+          <button id="importOptionsCancel" class="secondary" type="button">Cancelar</button>
         </div>
       </section>
     </div>
