@@ -14,6 +14,13 @@ URL pública: [https://facundoraulbistolfi.github.io/toca-toca/](https://facundo
 
 `v1.2.0`
 
+## Idiomas
+
+- La app incluye selector de idioma en Configuración: `es`, `en` y `pt-BR`.
+- Primera visita: detecta idioma del navegador (fallback `es`).
+- Persistencia: guarda idioma en cookie + `localStorage`, y tambien en backups de configuracion.
+- Backups legacy sin `language`: mantienen fallback de compatibilidad en `es`.
+
 ## Autor y créditos
 
 - Creado por [Facundo Bistolfi](https://github.com/facundoraulbistolfi).
