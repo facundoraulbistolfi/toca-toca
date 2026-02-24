@@ -6,13 +6,20 @@ App web estilo casino para decidir a quién le toca, con una ruleta totalmente c
 
 URL pública: [https://facundoraulbistolfi.github.io/toca-toca/](https://facundoraulbistolfi.github.io/toca-toca/)
 
-[![Versión](https://img.shields.io/badge/version-v1.2.0-0a7f5a.svg)](./changelog.md)
+[![Versión](https://img.shields.io/badge/version-v1.3.0-0a7f5a.svg)](./changelog.md)
 [![Estado](https://img.shields.io/badge/estado-productiva-1f8f5f.svg)](./changelog.md)
 [![Stack](https://img.shields.io/badge/stack-HTML%20%7C%20CSS%20%7C%20JS-informational.svg)](#tecnologías-usadas)
 
 ## Versión actual
 
-`v1.2.0`
+`v1.3.0`
+
+## Idiomas
+
+- La app incluye selector de idioma en Configuración: `es`, `en` y `pt-BR`.
+- Primera visita: detecta idioma del navegador (fallback `es`).
+- Persistencia: guarda idioma en cookie + `localStorage`, y tambien en backups de configuracion.
+- Backups legacy sin `language`: mantienen fallback de compatibilidad en `es`.
 
 ## Autor y créditos
 
@@ -45,7 +52,7 @@ No compartas datos personales o sensibles en los issues.
 - Los botones de acción deben mantener estilo visual unificado en paleta madera.
 - Cada botón debe incluir un emoji descriptivo cuando sea posible, sin sacrificar claridad del texto.
 
-## Lo que incluye v1.0.0
+## Lo que incluye la app
 
 - Giro realista con desaceleración y opción de frenado por click.
 - Duración aleatoria configurable (`1` a `60` segundos).

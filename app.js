@@ -8,6 +8,26 @@ const SPIN_HISTORY_STORAGE_KEY = "tocaTocaSpinHistory";
 const CHANGELOG_FILE_PATH = "changelog.md";
 const EMOJI_CATALOG_SCRIPT_PATH = "emoji-catalog.js";
 const stateStoreApi = globalThis?.TocaTocaStateStore || createFallbackStateStoreApi();
+const i18nGlobalApi = globalThis?.TocaTocaI18n;
+const i18nApi =
+  i18nGlobalApi &&
+  typeof i18nGlobalApi.t === "function" &&
+  typeof i18nGlobalApi.sanitizeLanguage === "function" &&
+  typeof i18nGlobalApi.detectPreferredLanguage === "function" &&
+  typeof i18nGlobalApi.toLocale === "function"
+    ? i18nGlobalApi
+    : createFallbackI18nApi();
+const DEFAULT_LANGUAGE = i18nApi?.DEFAULT_LANGUAGE || "es";
+const SUPPORTED_LANGUAGES = Array.isArray(i18nApi?.SUPPORTED_LANGUAGES) && i18nApi.SUPPORTED_LANGUAGES.length > 0
+  ? i18nApi.SUPPORTED_LANGUAGES.slice()
+  : [DEFAULT_LANGUAGE, "en", "pt-BR"];
+const LANGUAGE_OPTIONS = Array.isArray(i18nApi?.LANGUAGE_OPTIONS) && i18nApi.LANGUAGE_OPTIONS.length > 0
+  ? i18nApi.LANGUAGE_OPTIONS.slice()
+  : [
+      { value: "es", label: "\uD83C\uDDEA\uD83C\uDDF8 Espanol" },
+      { value: "en", label: "\uD83C\uDDEC\uD83C\uDDE7 English" },
+      { value: "pt-BR", label: "\uD83C\uDDE7\uD83C\uDDF7 Portugues (Brasil)" },
+    ];
 const DEFAULT_SPIN_DURATION_MIN = 20;
 const DEFAULT_SPIN_DURATION_MAX = 40;
 const MIN_SPIN_DURATION = 1;
@@ -23,6 +43,8 @@ const MAX_TEXT_POSITION_PCT = 80;
 const DEFAULT_FONT_SIZE_PX = 26;
 const MIN_FONT_SIZE_PX = 12;
 const MAX_FONT_SIZE_PX = 30;
+const MAX_HERO_TITLE_LENGTH = 40;
+const MAX_HERO_SUBTITLE_LENGTH = 80;
 const DEFAULT_FONT_FAMILY_ID = "cinzelDecorative";
 const FONT_OPTIONS = [
   { id: "cinzel", label: "Cinzel Clasica", family: "'Cinzel', 'Georgia', 'Times New Roman', serif" },
@@ -76,17 +98,32 @@ const FONT_OPTIONS = [
 const FONT_OPTION_MAP = new Map(FONT_OPTIONS.map((option) => [option.id, option]));
 const DEFAULT_WINNER_ANIMATION_MODE = "emojiRain";
 const WINNER_ANIMATION_OPTIONS = [
-  { id: "random", emoji: "🎲", label: "Aleatorio" },
-  { id: "emojiRain", emoji: "🌧️", label: "Lluvia de emojis (clásica)" },
-  { id: "emojiRainExtreme", emoji: "🌊", label: "Lluvia de emojis (extrema)" },
-  { id: "emojiHose", emoji: "🚿", label: "Manguera de emojis" },
-  { id: "fuegosArtificiales", emoji: "🎆", label: "Fuegos artificiales" },
-  { id: "cartaBlanca", emoji: "🃏", label: "Carta blanca" },
-  { id: "cartaBlancaFreecell", emoji: "🤴", label: "Carta blanca (Classic)" },
-  { id: "emojiBounce", emoji: "🪀", label: "Rebote emoji" },
-  { id: "confeti", emoji: "🎉", label: "Confeti" },
-  { id: "estrellas", emoji: "✨", label: "Estrellas" },
-  { id: "neonPulse", emoji: "⚡", label: "Pulso neón" },
+  { id: "random", emoji: "🎲", labelKey: "animations.random", label: "Aleatorio" },
+  { id: "emojiRain", emoji: "🌧️", labelKey: "animations.emojiRain", label: "Lluvia de emojis (clásica)" },
+  {
+    id: "emojiRainExtreme",
+    emoji: "🌊",
+    labelKey: "animations.emojiRainExtreme",
+    label: "Lluvia de emojis (extrema)",
+  },
+  { id: "emojiHose", emoji: "🚿", labelKey: "animations.emojiHose", label: "Manguera de emojis" },
+  {
+    id: "fuegosArtificiales",
+    emoji: "🎆",
+    labelKey: "animations.fuegosArtificiales",
+    label: "Fuegos artificiales",
+  },
+  { id: "cartaBlanca", emoji: "🃏", labelKey: "animations.cartaBlanca", label: "Carta blanca" },
+  {
+    id: "cartaBlancaFreecell",
+    emoji: "🤴",
+    labelKey: "animations.cartaBlancaFreecell",
+    label: "Carta blanca (Classic)",
+  },
+  { id: "emojiBounce", emoji: "🪀", labelKey: "animations.emojiBounce", label: "Rebote emoji" },
+  { id: "confeti", emoji: "🎉", labelKey: "animations.confeti", label: "Confeti" },
+  { id: "estrellas", emoji: "✨", labelKey: "animations.estrellas", label: "Estrellas" },
+  { id: "neonPulse", emoji: "⚡", labelKey: "animations.neonPulse", label: "Pulso neón" },
 ];
 const WINNER_ANIMATION_MODE_VALUES = new Set(WINNER_ANIMATION_OPTIONS.map((option) => option.id));
 const WINNER_ANIMATION_RANDOM_POOL = WINNER_ANIMATION_OPTIONS
@@ -97,7 +134,7 @@ const WINNER_ANIMATION_OPTION_MAP = new Map(
 );
 const DEFAULT_PARTICIPANT_ANIMATION_MODE = "general";
 const RETRY_SLICE_COLOR_INDEX = -1;
-const RETRY_SLICE_LABEL = "Tira otra vez";
+const RETRY_SLICE_LABEL_FALLBACK = "Tira otra vez";
 const RETRY_SLICE_EMOJI = "🔁";
 const DEFAULT_RETRY_SLICE_ENABLED = false;
 const DEFAULT_RETRY_SLICE_PCT = 12;
@@ -115,10 +152,16 @@ const ARGENTINA_EASTER_EGG_EMOJI_POOL = ["🧉", "🇦🇷", "⚽", "⭐", "🌟
 const ARGENTINA_EASTER_EGG_FEATURED_EMOJIS = ["🇦🇷", "🧉", "⚽", "⭐", "🌟", "🏆"];
 const ARGENTINA_EASTER_EGG_FOCUS_EMOJIS = ["🧉", "🇦🇷", "🧉", "🇦🇷", "🧉", "🇦🇷", "⚽", "⭐"];
 const PARTICIPANT_ANIMATION_OPTIONS = [
-  { id: "general", emoji: "🌐", label: "General (usar ajuste global)" },
+  {
+    id: "general",
+    emoji: "🌐",
+    labelKey: "animations.participantGeneral",
+    label: "General (usar ajuste global)",
+  },
   ...WINNER_ANIMATION_OPTIONS.map((option) => ({
     id: option.id,
     emoji: option.emoji,
+    labelKey: option.labelKey,
     label: option.label,
   })),
 ];
@@ -161,6 +204,7 @@ const BG_RAIN_MIN_DELAY_MS = 180;
 const BG_RAIN_MAX_DELAY_MS = 340;
 const BG_RAIN_MAX_ACTIVE_DROPS = 64;
 const DEFAULT_EMOJIS = ["😀", "😎", "🤖", "🔥", "🍀", "🚀", "🎯", "⭐", "⚡", "🌈"];
+let state = null;
 let EMOJI_CATALOG = null;
 let EMOJI_SECTIONS = buildEmojiSections(null);
 let EMOJI_OPTIONS = EMOJI_SECTIONS.flatMap((section) => section.items);
@@ -239,6 +283,9 @@ const refs = {
   fontFamilySelect: document.getElementById("fontFamilySelect"),
   winAnimationSelect: document.getElementById("winAnimationSelect"),
   reduceMotionToggle: document.getElementById("reduceMotionToggle"),
+  languageSelect: document.getElementById("languageSelect"),
+  heroTitleInput: document.getElementById("heroTitleInput"),
+  heroSubtitleInput: document.getElementById("heroSubtitleInput"),
   itemList: document.getElementById("itemList"),
   bulkParticipantsInput: document.getElementById("bulkParticipantsInput"),
   bulkAddButton: document.getElementById("bulkAddButton"),
@@ -292,6 +339,10 @@ const refs = {
   emojiNativeInput: document.getElementById("emojiNativeInput"),
   emojiSections: document.getElementById("emojiSections"),
   infoModal: document.getElementById("infoModal"),
+  infoDescriptionText: document.getElementById("infoDescriptionText"),
+  infoVersionLabel: document.getElementById("infoVersionLabel"),
+  infoCreatedByText: document.getElementById("infoCreatedByText"),
+  infoBuiltWithText: document.getElementById("infoBuiltWithText"),
   infoVersionText: document.getElementById("infoVersionText"),
   infoChangelogDetails: document.getElementById("infoChangelogDetails"),
   changelogList: document.getElementById("changelogList"),
@@ -324,7 +375,7 @@ if (!ctx) {
   throw new Error("No se pudo inicializar el canvas de la rula.");
 }
 
-let state = loadState();
+state = loadState();
 let statsStore = loadStatsStore();
 let stats = loadStats();
 let spinHistory = loadSpinHistory();
@@ -362,9 +413,65 @@ let importIncludeConfigOnNextFile = true;
 let importIncludeStatsOnNextFile = true;
 let statsTotalsExpanded = false;
 
+function tr(key, params = {}) {
+  return i18nApi.t(getCurrentLanguage(), key, params);
+}
+
+function getCurrentLanguage() {
+  return sanitizeLanguage(state?.language, DEFAULT_LANGUAGE);
+}
+
+function getCurrentLocale() {
+  return i18nApi.toLocale(getCurrentLanguage());
+}
+
+function getResolvedHeroTitle() {
+  const custom = sanitizeHeroTitle(state?.customTitle);
+  return custom || tr("app.title");
+}
+
+function getResolvedHeroSubtitle() {
+  const custom = sanitizeHeroSubtitle(state?.customSubtitle);
+  return custom || tr("app.subtitle");
+}
+
+function getRetrySliceLabel() {
+  const text = tr("labels.resultRetryLabel");
+  return text && text !== "labels.resultRetryLabel" ? text : RETRY_SLICE_LABEL_FALLBACK;
+}
+
+function getWinnerAnimationLabel(option) {
+  if (!option || typeof option !== "object") {
+    return "";
+  }
+  if (typeof option.labelKey === "string" && option.labelKey) {
+    const translated = tr(option.labelKey);
+    if (translated && translated !== option.labelKey) {
+      return translated;
+    }
+  }
+  return String(option.label || "");
+}
+
+function getColorPaletteLabel(palette) {
+  if (!palette || typeof palette !== "object") {
+    return "";
+  }
+  if (typeof palette.id === "string" && palette.id) {
+    const key = `palettes.${palette.id}`;
+    const translated = tr(key);
+    if (translated !== key) {
+      return translated;
+    }
+  }
+  return String(palette.label || palette.id || "");
+}
+
 init();
 
 function init() {
+  initLanguageSelector();
+  applyStaticTranslations();
   initFontSelector();
   initWinnerAnimationSelector();
   initColorModal();
@@ -379,6 +486,280 @@ function init() {
   startBackgroundEmojiRain();
   closeConfigPanel(false);
   closeParticipantsPanel(false);
+}
+
+function resolveElement(target) {
+  if (typeof target === "string") {
+    return document.querySelector(target);
+  }
+  return target instanceof HTMLElement ? target : null;
+}
+
+function setTextNode(target, text) {
+  const node = resolveElement(target);
+  if (!(node instanceof HTMLElement)) {
+    return;
+  }
+  node.textContent = String(text || "");
+}
+
+function setNodeAttribute(target, attribute, value) {
+  const node = resolveElement(target);
+  if (!(node instanceof HTMLElement)) {
+    return;
+  }
+  node.setAttribute(attribute, String(value || ""));
+}
+
+function setOptionText(select, index, text) {
+  if (!(select instanceof HTMLSelectElement)) {
+    return;
+  }
+  const option = select.options[index];
+  if (option) {
+    option.textContent = String(text || "");
+  }
+}
+
+function initLanguageSelector() {
+  if (!(refs.languageSelect instanceof HTMLSelectElement)) {
+    return;
+  }
+  refs.languageSelect.replaceChildren();
+  LANGUAGE_OPTIONS.forEach((option) => {
+    const node = document.createElement("option");
+    node.value = sanitizeLanguage(option?.value, DEFAULT_LANGUAGE);
+    node.textContent = String(option?.label || node.value);
+    refs.languageSelect.append(node);
+  });
+  refs.languageSelect.value = getCurrentLanguage();
+}
+
+function applyStaticTranslations() {
+  const language = getCurrentLanguage();
+  document.documentElement.lang = language;
+
+  renderHeroTexts();
+  setTextNode("#languageSelectLabel", tr("language.label"));
+  setNodeAttribute(refs.languageSelect, "aria-label", tr("language.label"));
+
+  setNodeAttribute(refs.configPanelToggle, "data-tooltip", tr("ui.toggle.config.tooltip"));
+  setNodeAttribute(refs.configPanelToggle, "aria-label", tr("ui.toggle.config.open"));
+  setNodeAttribute(refs.configPanelToggle, "title", tr("ui.toggle.config.open"));
+
+  setNodeAttribute(refs.participantsPanelToggle, "data-tooltip", tr("ui.toggle.participants.tooltip"));
+  setNodeAttribute(refs.participantsPanelToggle, "aria-label", tr("ui.toggle.participants.open"));
+  setNodeAttribute(refs.participantsPanelToggle, "title", tr("ui.toggle.participants.open"));
+
+  setNodeAttribute(refs.statsPanelToggle, "data-tooltip", tr("ui.toggle.stats.tooltip"));
+  setNodeAttribute(refs.statsPanelToggle, "aria-label", tr("ui.toggle.stats.open"));
+  setNodeAttribute(refs.statsPanelToggle, "title", tr("ui.toggle.stats.open"));
+
+  setNodeAttribute(refs.infoPanelToggle, "data-tooltip", tr("ui.toggle.info.tooltip"));
+  setNodeAttribute(refs.infoPanelToggle, "aria-label", tr("ui.toggle.info.open"));
+  setNodeAttribute(refs.infoPanelToggle, "title", tr("ui.toggle.info.open"));
+
+  setNodeAttribute(refs.canvas, "aria-label", tr("ui.wheel.aria"));
+  if (refs.resultText instanceof HTMLElement) {
+    const currentResult = String(refs.resultText.textContent || "").trim();
+    const translatedTapStates = SUPPORTED_LANGUAGES.map((entryLanguage) =>
+      i18nApi.t(entryLanguage, "status.tapToSpin"),
+    );
+    if (!currentResult || translatedTapStates.includes(currentResult)) {
+      setTextNode(refs.resultText, tr("status.tapToSpin"));
+    }
+  }
+
+  setTextNode("#configPanel .side-panel-header h2", tr("ui.config.title"));
+  setNodeAttribute(refs.configPanelClose, "aria-label", tr("ui.common.closeConfig"));
+  setNodeAttribute(refs.configPanelClose, "title", tr("ui.common.closeConfig"));
+  setTextNode("#configPanel .panel-settings-static:nth-of-type(1) .panel-settings-title", tr("ui.config.wheelSection"));
+  setTextNode("#heroTitleInputLabel", tr("ui.config.heroTitleLabel"));
+  setTextNode("#heroSubtitleInputLabel", tr("ui.config.heroSubtitleLabel"));
+  setNodeAttribute(refs.heroTitleInput, "placeholder", tr("ui.config.heroTitlePlaceholder"));
+  setNodeAttribute(refs.heroSubtitleInput, "placeholder", tr("ui.config.heroSubtitlePlaceholder"));
+  setNodeAttribute(refs.heroTitleInput, "aria-label", tr("ui.config.heroTitleLabel"));
+  setNodeAttribute(refs.heroSubtitleInput, "aria-label", tr("ui.config.heroSubtitleLabel"));
+  setTextNode(".text-controls-title", tr("ui.config.textControls"));
+  setTextNode("label[for='textLayoutSelect']", tr("ui.config.textLayout"));
+  setTextNode("label[for='emojiDisplaySelect']", tr("ui.config.emojiMode"));
+  setTextNode("label[for='fontPickerSummary']", tr("ui.config.wheelFont"));
+  setTextNode("label[for='winAnimationSelect']", tr("ui.config.winAnimation"));
+  setTextNode("#winAnimationSelect + .hint", tr("ui.config.winAnimationHint"));
+  setTextNode("#reduceMotionLabel", tr("ui.config.reduceMotion"));
+  setTextNode("label[for='durationMinNumber'] > span", tr("ui.config.durationMinLabel"));
+  setTextNode("label[for='durationMaxNumber'] > span", tr("ui.config.durationMaxLabel"));
+  setNodeAttribute(refs.durationRangeMin, "aria-label", tr("ui.config.durationMinAria"));
+  setNodeAttribute(refs.durationRangeMax, "aria-label", tr("ui.config.durationMaxAria"));
+  setNodeAttribute(refs.durationMinNumber, "aria-label", tr("ui.config.durationMinAria"));
+  setNodeAttribute(refs.durationMaxNumber, "aria-label", tr("ui.config.durationMaxAria"));
+  setNodeAttribute(refs.autoTextTuneButton, "data-tooltip", tr("ui.config.autoTune"));
+  setNodeAttribute(refs.autoTextTuneButton, "aria-label", tr("ui.config.autoTuneAria"));
+  setNodeAttribute(refs.fontPickerSummary, "aria-label", tr("ui.config.wheelFont"));
+  setNodeAttribute(refs.fontPickerOptions, "aria-label", tr("ui.config.fontOptionsAria"));
+  setNodeAttribute(refs.winAnimationSelect, "aria-label", tr("ui.config.winAnimation"));
+  setNodeAttribute(refs.reduceMotionToggle, "aria-label", tr("controls.reduceMotionOff"));
+  setTextNode("#configPanel .panel-settings-static:nth-of-type(2) .panel-settings-title", tr("ui.config.backupSection"));
+  setTextNode("#configPanel .panel-settings-static:nth-of-type(2) .hint", tr("ui.config.backupHint"));
+
+  setOptionText(refs.textLayoutSelect, 0, tr("ui.config.layout.radial"));
+  setOptionText(refs.textLayoutSelect, 1, tr("ui.config.layout.tangent"));
+  setOptionText(refs.textLayoutSelect, 2, tr("ui.config.layout.horizontal"));
+  setOptionText(refs.emojiDisplaySelect, 0, tr("ui.config.emoji.both"));
+  setOptionText(refs.emojiDisplaySelect, 1, tr("ui.config.emoji.prefix"));
+  setOptionText(refs.emojiDisplaySelect, 2, tr("ui.config.emoji.suffix"));
+  setOptionText(refs.emojiDisplaySelect, 3, tr("ui.config.emoji.none"));
+
+  setNodeAttribute(refs.exportConfigButton, "data-tooltip", tr("ui.config.backupExport"));
+  setNodeAttribute(refs.exportConfigButton, "aria-label", tr("ui.config.backupExport"));
+  setNodeAttribute(refs.importConfigButton, "data-tooltip", tr("ui.config.backupImport"));
+  setNodeAttribute(refs.importConfigButton, "aria-label", tr("ui.config.backupImport"));
+  setNodeAttribute(refs.resetButton, "data-tooltip", tr("ui.config.reset"));
+  setNodeAttribute(refs.resetButton, "aria-label", tr("ui.config.reset"));
+
+  setTextNode("#participantsPanel .side-panel-header h2", tr("ui.participants.title"));
+  setNodeAttribute(refs.participantsPanelClose, "aria-label", tr("ui.common.closeParticipants"));
+  setNodeAttribute(refs.participantsPanelClose, "title", tr("ui.common.closeParticipants"));
+  setTextNode("#participantsPanel .panel-settings-title", tr("ui.participants.title"));
+  setTextNode("#participantsPanel .hint", tr("ui.participants.hint"));
+  setNodeAttribute(refs.addItemButton, "data-tooltip", tr("ui.participants.add"));
+  setNodeAttribute(refs.addItemButton, "aria-label", tr("ui.participants.add"));
+  setNodeAttribute(refs.bulkAddButton, "data-tooltip", tr("ui.participants.bulk"));
+  setNodeAttribute(refs.bulkAddButton, "aria-label", tr("ui.participants.bulk"));
+  setNodeAttribute(refs.equalizePercentagesButton, "data-tooltip", tr("ui.participants.equalize"));
+  setNodeAttribute(refs.equalizePercentagesButton, "aria-label", tr("ui.participants.equalize"));
+
+  setTextNode("#colorModalTitle", tr("ui.color.title"));
+  setNodeAttribute(refs.colorRandomButton, "aria-label", tr("ui.color.random"));
+  setNodeAttribute(refs.colorRandomButton, "title", tr("ui.color.randomShort"));
+  setNodeAttribute(refs.colorModalCancel, "aria-label", tr("ui.color.cancel"));
+  setNodeAttribute(refs.colorModalCancel, "title", tr("ui.color.cancel"));
+  setNodeAttribute(refs.colorModalConfirm, "aria-label", tr("ui.color.confirm"));
+  setNodeAttribute(refs.colorModalConfirm, "title", tr("ui.color.confirm"));
+  setTextNode("label[for='colorHexInput'] > span", tr("ui.color.hex"));
+  setNodeAttribute(refs.colorHexInput, "aria-label", tr("ui.color.hexAria"));
+  setTextNode(".color-modal-hint", tr("ui.color.hint"));
+  setTextNode("label[for='colorPaletteSelect'] > span", tr("ui.color.palette"));
+  setNodeAttribute(refs.colorPaletteSelect, "aria-label", tr("ui.color.paletteAria"));
+
+  setTextNode("#emojiModalTitle", tr("ui.emoji.title"));
+  setNodeAttribute(refs.emojiRandomButton, "aria-label", tr("ui.emoji.random"));
+  setNodeAttribute(refs.emojiRandomButton, "title", tr("ui.emoji.randomShort"));
+  setNodeAttribute(refs.emojiModalCancel, "aria-label", tr("ui.emoji.cancel"));
+  setNodeAttribute(refs.emojiModalCancel, "title", tr("ui.emoji.cancel"));
+  setNodeAttribute(refs.emojiModalConfirm, "aria-label", tr("ui.emoji.confirm"));
+  setNodeAttribute(refs.emojiModalConfirm, "title", tr("ui.emoji.confirm"));
+  setNodeAttribute(refs.emojiSelectedPreview, "title", tr("ui.emoji.previewTitle"));
+  setTextNode("label[for='emojiSearchInput'] > span", tr("ui.emoji.search"));
+  setNodeAttribute(refs.emojiSearchInput, "placeholder", tr("ui.emoji.searchPlaceholder"));
+  setNodeAttribute(refs.emojiSearchInput, "aria-label", tr("ui.emoji.search"));
+  setNodeAttribute(refs.emojiNativeInput, "aria-label", tr("ui.emoji.custom"));
+  setNodeAttribute(refs.emojiSections, "aria-label", tr("ui.emoji.sectionsAria"));
+
+  setTextNode("#infoModalTitle", tr("ui.info.title"));
+  setNodeAttribute(refs.infoModalClose, "aria-label", tr("ui.common.closeInfo"));
+  setNodeAttribute(refs.infoModalClose, "title", tr("ui.common.closeInfo"));
+  setTextNode("#infoDescriptionText", tr("ui.info.description"));
+  setTextNode("#infoVersionLabel", tr("ui.info.versionLabel"));
+  setTextNode("#infoCreatedByText", tr("ui.info.createdBy"));
+  setTextNode("#infoBuiltWithText", tr("ui.info.builtWith"));
+  setNodeAttribute(refs.argentinaFlagButton, "aria-label", tr("ui.info.easterEgg"));
+  setNodeAttribute(refs.argentinaFlagButton, "title", tr("ui.info.easterEgg"));
+  setTextNode("#infoModal .contact-info-block h4", tr("ui.info.contactTitle"));
+  setTextNode("#infoModal .contact-info-block > p:not(.contact-privacy-note)", tr("ui.info.contactText"));
+  setTextNode("#infoModal .contact-privacy-note", tr("ui.info.contactPrivacy"));
+  setTextNode("#infoModal .contact-action-button[href*='bug-report.yml']", tr("ui.info.contactBug"));
+  setTextNode("#infoModal .contact-action-button[href*='idea.yml']", tr("ui.info.contactIdea"));
+  setTextNode("#infoModal .contact-open-issues a", tr("ui.info.contactOpenIssues"));
+  setTextNode("#infoModal .info-changelog-summary", tr("ui.info.changelog"));
+
+  setTextNode("#statsModalTitle", tr("ui.stats.title"));
+  setNodeAttribute(refs.statsModalClose, "aria-label", tr("ui.common.closeStats"));
+  setNodeAttribute(refs.statsModalClose, "title", tr("ui.common.closeStats"));
+  setTextNode("#statsModal .stats-summary-card:nth-child(1) h4", tr("ui.stats.lastWinner"));
+  setTextNode("#statsModal .stats-summary-card:nth-child(2) h4", tr("ui.stats.bestStreak"));
+  setTextNode("#statsModal .stats-table-header h4", tr("ui.stats.totals"));
+  setTextNode("#statsRecentDetails .stats-collapsible-title", tr("ui.stats.lastTen"));
+  setTextNode("#statsEmptyState", tr("labels.noHistoryYet"));
+  setTextNode("#statsRecentEmptyState", tr("labels.noRecentHistoryYet"));
+  if (refs.statsTotalsToggle instanceof HTMLElement) {
+    refs.statsTotalsToggle.textContent = tr("labels.showMore", { count: DEFAULT_VISIBLE_TOTALS_ROWS });
+  }
+  const totalsHeaders = refs.statsTableWrap?.querySelectorAll("thead th");
+  if (totalsHeaders && totalsHeaders.length >= 3) {
+    totalsHeaders[1].textContent = tr("table.player");
+    totalsHeaders[2].textContent = tr("table.times");
+  }
+  const recentHeaders = refs.statsRecentWrap?.querySelectorAll("thead th");
+  if (recentHeaders && recentHeaders.length >= 2) {
+    recentHeaders[0].textContent = tr("table.date");
+    recentHeaders[1].textContent = tr("table.winner");
+  }
+
+  setTextNode("#resetConfirmTitle", tr("ui.reset.title"));
+  setNodeAttribute(refs.resetConfirmClose, "aria-label", tr("ui.common.closeReset"));
+  setNodeAttribute(refs.resetConfirmClose, "title", tr("ui.common.closeReset"));
+  setTextNode("#resetConfirmModal .reset-confirm-text:first-of-type", tr("ui.reset.pickScope"));
+  setTextNode("#resetConfirmModal legend", tr("ui.reset.options"));
+  setTextNode("label[for='resetScopeConfig'] > span", tr("ui.reset.config"));
+  setTextNode("label[for='resetScopeUsers'] > span", tr("ui.reset.users"));
+  setTextNode("label[for='resetScopeHistory'] > span", tr("ui.reset.history"));
+  setTextNode("#resetConfirmModal .reset-confirm-text:last-of-type", tr("ui.reset.warning"));
+  setTextNode("#resetConfirmAccept", tr("ui.reset.confirm"));
+  setTextNode("#resetConfirmCancel", tr("ui.reset.back"));
+
+  setTextNode("#bulkParticipantsTitle", tr("ui.bulk.title"));
+  setNodeAttribute(refs.bulkParticipantsClose, "aria-label", tr("ui.bulk.close"));
+  setNodeAttribute(refs.bulkParticipantsClose, "title", tr("ui.bulk.close"));
+  setTextNode("#bulkParticipantsModal legend", tr("ui.bulk.mode"));
+  setTextNode("label[for='bulkModeAppend'] > span", tr("ui.bulk.append"));
+  setTextNode("label[for='bulkModeReplace'] > span", tr("ui.bulk.replace"));
+  setTextNode("label[for='bulkParticipantsInput'] > span", tr("ui.bulk.pasteList"));
+  setNodeAttribute(refs.bulkParticipantsInput, "placeholder", tr("ui.bulk.placeholder"));
+  setNodeAttribute(refs.bulkParticipantsInput, "aria-label", tr("ui.bulk.aria"));
+  setTextNode("#bulkParticipantsConfirm", tr("ui.bulk.apply"));
+  setTextNode("#bulkParticipantsCancel", tr("ui.bulk.cancel"));
+
+  setTextNode("#exportOptionsTitle", tr("ui.export.title"));
+  setNodeAttribute(refs.exportOptionsClose, "aria-label", tr("ui.export.close"));
+  setNodeAttribute(refs.exportOptionsClose, "title", tr("ui.export.close"));
+  setTextNode("#exportOptionsModal legend", tr("ui.export.include"));
+  setTextNode("label[for='exportIncludeConfig'] > span", tr("ui.export.includeConfig"));
+  setTextNode("label[for='exportIncludeStats'] > span", tr("ui.export.includeStats"));
+  setTextNode("#exportOptionsConfirm", tr("ui.export.confirm"));
+  setTextNode("#exportOptionsCancel", tr("ui.export.cancel"));
+
+  setTextNode("#importOptionsTitle", tr("ui.import.title"));
+  setNodeAttribute(refs.importOptionsClose, "aria-label", tr("ui.import.close"));
+  setNodeAttribute(refs.importOptionsClose, "title", tr("ui.import.close"));
+  setTextNode("#importOptionsModal legend", tr("ui.import.apply"));
+  setTextNode("label[for='importIncludeConfig'] > span", tr("ui.import.applyConfig"));
+  setTextNode("label[for='importIncludeStats'] > span", tr("ui.import.applyStats"));
+  setTextNode("#importOptionsConfirm", tr("ui.import.pickFile"));
+  setTextNode("#importOptionsCancel", tr("ui.import.cancel"));
+
+  if (floatingTooltipTarget instanceof HTMLElement) {
+    showFloatingTooltip(floatingTooltipTarget);
+  }
+}
+
+function renderHeroTexts() {
+  const resolvedTitle = getResolvedHeroTitle();
+  setTextNode("#heroTitle", resolvedTitle);
+  setTextNode("#heroSubtitle", getResolvedHeroSubtitle());
+  const titleNode = document.querySelector("title");
+  if (titleNode) {
+    titleNode.textContent = resolvedTitle;
+  }
+}
+
+function renderHeroTextInputs() {
+  if (refs.heroTitleInput instanceof HTMLInputElement) {
+    refs.heroTitleInput.value = sanitizeHeroTitle(state?.customTitle);
+  }
+  if (refs.heroSubtitleInput instanceof HTMLInputElement) {
+    refs.heroSubtitleInput.value = sanitizeHeroSubtitle(state?.customSubtitle);
+  }
 }
 
 function bindEvents() {
@@ -466,6 +847,21 @@ function bindEvents() {
   refs.reduceMotionToggle.addEventListener("change", () => {
     setReduceMotion(refs.reduceMotionToggle.checked);
   });
+  if (refs.languageSelect instanceof HTMLSelectElement) {
+    refs.languageSelect.addEventListener("change", () => {
+      setLanguage(refs.languageSelect.value);
+    });
+  }
+  if (refs.heroTitleInput instanceof HTMLInputElement) {
+    refs.heroTitleInput.addEventListener("input", () => {
+      setCustomHeroTitle(refs.heroTitleInput.value);
+    });
+  }
+  if (refs.heroSubtitleInput instanceof HTMLInputElement) {
+    refs.heroSubtitleInput.addEventListener("input", () => {
+      setCustomHeroSubtitle(refs.heroSubtitleInput.value);
+    });
+  }
   refs.bulkAddButton.addEventListener("click", openBulkParticipantsModal);
   refs.exportConfigButton.addEventListener("click", openExportOptionsModal);
   refs.importConfigButton.addEventListener("click", openImportOptionsModal);
@@ -957,7 +1353,7 @@ function initWinnerAnimationSelector() {
   WINNER_ANIMATION_OPTIONS.forEach((option) => {
     const row = document.createElement("option");
     row.value = option.id;
-    row.textContent = `${option.emoji} ${option.label}`;
+    row.textContent = `${option.emoji} ${getWinnerAnimationLabel(option)}`;
     refs.winAnimationSelect.append(row);
   });
 }
@@ -1003,7 +1399,7 @@ async function ensureInfoChangelogLoaded() {
     return;
   }
   refs.changelogList.dataset.loaded = "loading";
-  refs.changelogList.replaceChildren(buildChangelogStatusItem("Cargando changelog..."));
+  refs.changelogList.replaceChildren(buildChangelogStatusItem(tr("messages.changelogLoading")));
   changelogLoadPromise = loadInfoChangelogFromFile()
     .catch(() => {
       renderChangelogLoadError();
@@ -1084,12 +1480,12 @@ function renderInfoChangelog(parsedChangelog) {
   const safeEntries = Array.isArray(parsedChangelog?.entries) ? parsedChangelog.entries : [];
   if (safeEntries.length === 0) {
     refs.changelogList.dataset.loaded = "false";
-    refs.changelogList.replaceChildren(buildChangelogStatusItem("No hay entradas de changelog."));
+    refs.changelogList.replaceChildren(buildChangelogStatusItem(tr("messages.changelogEmpty")));
   } else {
     safeEntries.forEach((entry) => {
       const item = document.createElement("li");
       const title = document.createElement("strong");
-      title.textContent = String(entry?.title || "Versión sin titulo");
+      title.textContent = String(entry?.title || tr("ui.info.changelogNoTitle"));
       item.append(title);
 
       const notes = Array.isArray(entry?.notes) ? entry.notes : [];
@@ -1122,7 +1518,7 @@ function renderChangelogLoadError() {
   }
   refs.changelogList.dataset.loaded = "false";
   refs.changelogList.replaceChildren(
-    buildChangelogStatusItem("No se pudo cargar changelog.md en este entorno."),
+    buildChangelogStatusItem(tr("messages.changelogLoadError")),
   );
 }
 
@@ -1156,7 +1552,7 @@ function closeStatsModal(restoreFocus = true) {
 
 function triggerInfoEasterEgg() {
   if (isSpinning) {
-    setMessage("El easter egg se activa cuando la rula está quieta.", "error");
+    setMessage(tr("messages.easterEggRequiresIdle"), "error");
     return;
   }
   if (shouldReduceMotion()) {
@@ -1165,7 +1561,7 @@ function triggerInfoEasterEgg() {
     celebrationTimeoutId = window.setTimeout(() => {
       clearWinnerCelebrationVisuals();
     }, 420);
-    setMessage("Easter egg argento activado (animación reducida).", "success");
+    setMessage(tr("messages.easterEggReduced"), "success");
     return;
   }
   clearWinnerCelebrationVisuals();
@@ -1176,7 +1572,7 @@ function triggerInfoEasterEgg() {
     clearWinnerCelebrationVisuals();
   }, celebrationDurationMs);
   startWinnerLights(celebrationDurationMs + 300);
-  setMessage("Easter egg argento activado.", "success");
+  setMessage(tr("messages.easterEggEnabled"), "success");
 }
 
 function openResetConfirmModal() {
@@ -1272,7 +1668,7 @@ function confirmImportOptionsModal() {
   importIncludeConfigOnNextFile = refs.importIncludeConfig.checked === true;
   importIncludeStatsOnNextFile = refs.importIncludeStats.checked === true;
   if (!importIncludeConfigOnNextFile && !importIncludeStatsOnNextFile) {
-    setMessage("Selecciona al menos una opción para importar.", "error");
+    setMessage(tr("messages.selectAtLeastOneImportOption"), "error");
     return;
   }
   closeImportOptionsModal(false);
@@ -1312,7 +1708,7 @@ function initColorModal() {
   COLOR_PALETTES.forEach((palette) => {
     const option = document.createElement("option");
     option.value = palette.id;
-    option.textContent = palette.label;
+    option.textContent = getColorPaletteLabel(palette);
     refs.colorPaletteSelect.append(option);
   });
   activeColorPaletteId = sanitizeColorPaletteId(activeColorPaletteId);
@@ -1399,6 +1795,7 @@ function renderColorPresetGrid(selectedColor) {
   if (!palette) {
     return;
   }
+  const paletteLabel = getColorPaletteLabel(palette);
   palette.colors.forEach((color) => {
     const normalizedColor = sanitizeColor(color).toUpperCase();
     const button = document.createElement("button");
@@ -1408,8 +1805,8 @@ function renderColorPresetGrid(selectedColor) {
       button.classList.add("is-selected");
     }
     button.style.background = normalizedColor;
-    button.title = `${palette.label} ${normalizedColor}`;
-    button.setAttribute("aria-label", `Usar color ${normalizedColor}`);
+    button.title = `${paletteLabel} ${normalizedColor}`;
+    button.setAttribute("aria-label", tr("ui.color.useColor", { color: normalizedColor }));
     button.addEventListener("click", () => {
       setColorFromModal(normalizedColor);
     });
@@ -1471,7 +1868,7 @@ function renderEmojiSections(rawFilter) {
   }
   const empty = document.createElement("p");
   empty.className = "emoji-empty";
-  empty.textContent = "No hay emojis que coincidan con la búsqueda.";
+  empty.textContent = tr("emojis.noMatches");
   refs.emojiSections.append(empty);
 }
 
@@ -1646,6 +2043,8 @@ function bindRgbPair(rangeInput, numberInput) {
 }
 
 function render() {
+  renderHeroTexts();
+  renderHeroTextInputs();
   renderDuration();
   renderTextSettings();
   renderSoundToggle();
@@ -1659,7 +2058,7 @@ function renderSoundToggle() {
     return;
   }
   const muted = sanitizeSoundMuted(state.soundMuted);
-  const soundLabel = muted ? "Activar sonido" : "Silenciar sonido";
+  const soundLabel = muted ? tr("controls.soundOn") : tr("controls.soundOff");
   refs.soundToggle.textContent = muted ? "🔇" : "🔊";
   refs.soundToggle.classList.toggle("is-muted", muted);
   refs.soundToggle.setAttribute("aria-pressed", String(muted));
@@ -1676,7 +2075,10 @@ function renderDuration() {
   refs.durationRangeMax.value = String(state.spinDurationMaxSec);
   refs.durationMinNumber.value = String(state.spinDurationMinSec);
   refs.durationMaxNumber.value = String(state.spinDurationMaxSec);
-  refs.durationLabel.textContent = `Duración aleatoria: ${state.spinDurationMinSec}s - ${state.spinDurationMaxSec}s`;
+  refs.durationLabel.textContent = tr("controls.durationRandom", {
+    min: state.spinDurationMinSec,
+    max: state.spinDurationMaxSec,
+  });
   const minPct =
     ((state.spinDurationMinSec - MIN_SPIN_DURATION) / (MAX_SPIN_DURATION - MIN_SPIN_DURATION)) *
     100;
@@ -1698,12 +2100,12 @@ function renderTextSettings() {
   const reducedMotionEnabled = sanitizeReduceMotion(state.reduceMotion);
   refs.reduceMotionToggle.checked = reducedMotionEnabled;
   const reduceMotionLabel = reducedMotionEnabled
-    ? "Animaciones reducidas (modo tortuga)"
-    : "Animaciones completas (modo conejo)";
+    ? tr("controls.reduceMotionOn")
+    : tr("controls.reduceMotionOff");
   refs.reduceMotionToggle.title = reduceMotionLabel;
   refs.reduceMotionToggle.setAttribute("aria-label", reduceMotionLabel);
-  refs.textPositionLabel.textContent = `Posición en la sección: ${state.textPositionPct}%`;
-  refs.fontSizeLabel.textContent = `Tamaño de fuente: ${state.fontSizePx}px`;
+  refs.textPositionLabel.textContent = tr("controls.textPosition", { value: state.textPositionPct });
+  refs.fontSizeLabel.textContent = tr("controls.fontSize", { value: state.fontSizePx });
 }
 
 function renderFontPicker() {
@@ -1716,7 +2118,7 @@ function renderFontPicker() {
   refs.fontFamilySelect.style.fontFamily = option?.family || "";
 
   if (refs.fontPickerSummary instanceof HTMLElement) {
-    refs.fontPickerSummary.textContent = `${option?.label || "Fuente"} Aa`;
+    refs.fontPickerSummary.textContent = `${option?.label || tr("controls.fontFallback")} Aa`;
     refs.fontPickerSummary.style.fontFamily = option?.family || "";
   }
 
@@ -1768,27 +2170,27 @@ function renderItemList() {
   refs.importConfigButton.disabled = isSpinning;
   refs.addItemButton.disabled = isSpinning || maxParticipantsReached;
   const addItemTooltip = maxParticipantsReached
-    ? `Máximo ${MAX_PARTICIPANTS} participantes por configuración.`
-    : "Agregar participante";
+    ? tr("messages.addParticipantMax", { max: MAX_PARTICIPANTS })
+    : tr("ui.participants.add");
   refs.addItemButton.dataset.tooltip = addItemTooltip;
   refs.addItemButton.removeAttribute("title");
   refs.addItemButton.setAttribute(
     "aria-label",
     maxParticipantsReached
-      ? `Máximo ${MAX_PARTICIPANTS} participantes alcanzado`
-      : "Agregar participante",
+      ? tr("ui.participants.maxReached", { max: MAX_PARTICIPANTS })
+      : tr("ui.participants.add"),
   );
   refs.equalizePercentagesButton.disabled = isSpinning || !canEqualize;
   const equalizeTooltip = canEqualize
-    ? "Igualar porcentajes de participantes visibles"
-    : "Se necesitan al menos 2 participantes visibles";
+    ? tr("ui.participants.equalizeVisible")
+    : tr("ui.participants.needTwoVisible");
   refs.equalizePercentagesButton.dataset.tooltip = equalizeTooltip;
   refs.equalizePercentagesButton.removeAttribute("title");
   refs.equalizePercentagesButton.setAttribute(
     "aria-label",
     canEqualize
-      ? "Igualar porcentajes de participantes visibles"
-      : "Se necesitan al menos 2 participantes visibles para igualar porcentajes",
+      ? tr("ui.participants.equalizeVisible")
+      : tr("ui.participants.needTwoVisibleEqualize"),
   );
 
   refs.itemList.replaceChildren();
@@ -1806,8 +2208,8 @@ function renderItemList() {
     emojiButton.className = "emoji-trigger";
     emojiButton.dataset.participantIndex = String(index);
     emojiButton.textContent = sanitizeEmoji(item.emoji, index);
-    emojiButton.title = "Elegir emoji";
-    emojiButton.setAttribute("aria-label", `Elegir emoji del participante ${index + 1}`);
+    emojiButton.title = tr("ui.emoji.title");
+    emojiButton.setAttribute("aria-label", tr("ui.participants.pickEmoji", { index: index + 1 }));
     emojiButton.disabled = isSpinning;
     emojiButton.addEventListener("click", () => {
       openEmojiModal(index);
@@ -1817,7 +2219,7 @@ function renderItemList() {
     nameInput.type = "text";
     nameInput.maxLength = MAX_PARTICIPANT_NAME_LENGTH;
     nameInput.value = item.name;
-    nameInput.setAttribute("aria-label", `Nombre del participante ${index + 1}`);
+    nameInput.setAttribute("aria-label", tr("ui.participants.name", { index: index + 1 }));
     nameInput.disabled = isSpinning;
     nameInput.addEventListener("input", () => {
       state.items[index].name = String(nameInput.value || "").slice(0, MAX_PARTICIPANT_NAME_LENGTH);
@@ -1839,7 +2241,7 @@ function renderItemList() {
     colorSwatch.dataset.participantIndex = String(index);
     colorSwatch.style.background = sanitizeColor(item.color, index);
     colorSwatch.disabled = isSpinning;
-    colorSwatch.setAttribute("aria-label", `Elegir color del participante ${index + 1}`);
+    colorSwatch.setAttribute("aria-label", tr("ui.participants.pickColor", { index: index + 1 }));
     colorSwatch.addEventListener("click", () => {
       openColorModal(index);
     });
@@ -1851,10 +2253,10 @@ function renderItemList() {
     pctInput.min = "1";
     pctInput.max = "99";
     pctInput.value = String(Math.round(item.pct));
-    pctInput.setAttribute("aria-label", `Porcentaje del participante ${index + 1}`);
+    pctInput.setAttribute("aria-label", tr("ui.participants.percent", { index: index + 1 }));
     pctInput.disabled = isSpinning || isHidden;
     if (isHidden) {
-      pctInput.title = "Porcentaje bloqueado porque está oculto de la rula.";
+      pctInput.title = tr("ui.participants.percentBlocked");
     }
     pctInput.addEventListener("change", () => {
       const parsed = Number.parseFloat(pctInput.value);
@@ -1880,10 +2282,13 @@ function renderItemList() {
 
     const animationSummary = document.createElement("summary");
     animationSummary.textContent = animationChoice?.emoji || "🌐";
-    animationSummary.title = `Animación: ${animationChoice?.label || "General"}`;
+    animationSummary.title = `${tr("ui.participants.animation")}: ${getWinnerAnimationLabel(animationChoice) || tr("animations.participantGeneral")}`;
     animationSummary.setAttribute(
       "aria-label",
-      `Animación del participante ${index + 1}: ${animationChoice?.label || "General"}`,
+      tr("ui.participants.animationWithValue", {
+        index: index + 1,
+        value: getWinnerAnimationLabel(animationChoice) || tr("animations.participantGeneral"),
+      }),
     );
     animationPicker.append(animationSummary);
 
@@ -1896,7 +2301,7 @@ function renderItemList() {
       if (option.id === animationMode) {
         optionButton.classList.add("is-active");
       }
-      optionButton.textContent = `${option.emoji} ${option.label}`;
+      optionButton.textContent = `${option.emoji} ${getWinnerAnimationLabel(option)}`;
       optionButton.disabled = isSpinning;
       optionButton.addEventListener("click", (event) => {
         event.preventDefault();
@@ -1912,17 +2317,17 @@ function renderItemList() {
     visibilityButton.type = "button";
     visibilityButton.className = "visibility-button";
     visibilityButton.textContent = isHidden ? "🙈" : "👁";
-    visibilityButton.title = isHidden ? "Mostrar en la rula" : "Ocultar de la rula";
+    visibilityButton.title = isHidden ? tr("ui.participants.showInWheel") : tr("ui.participants.hideFromWheel");
     visibilityButton.setAttribute(
       "aria-label",
       isHidden
-        ? `Mostrar participante ${index + 1} en la rula`
-        : `Ocultar participante ${index + 1} de la rula`,
+        ? tr("ui.participants.showSpecific", { index: index + 1 })
+        : tr("ui.participants.hideSpecific", { index: index + 1 }),
     );
     visibilityButton.disabled =
       isSpinning || (!isHidden && visibleCount <= MIN_PARTICIPANTS);
     if (!isHidden && visibleCount <= MIN_PARTICIPANTS) {
-      visibilityButton.title = "La rula necesita al menos 2 participantes visibles";
+      visibilityButton.title = tr("messages.equalizeNeedsTwoVisible");
     }
     visibilityButton.addEventListener("click", () => {
       setParticipantHidden(index, !isHidden);
@@ -1932,8 +2337,8 @@ function renderItemList() {
     removeButton.type = "button";
     removeButton.className = "remove-button";
     removeButton.textContent = "🗑";
-    removeButton.title = "Eliminar participante";
-    removeButton.setAttribute("aria-label", `Eliminar participante ${index + 1}`);
+    removeButton.title = tr("ui.participants.remove");
+    removeButton.setAttribute("aria-label", tr("ui.participants.removeSpecific", { index: index + 1 }));
     removeButton.disabled = isSpinning || state.items.length <= MIN_PARTICIPANTS;
     removeButton.addEventListener("click", () => removeParticipant(index));
 
@@ -1982,7 +2387,7 @@ function renderStats() {
   } else {
     refs.statsLastWinner.replaceChildren(
       buildStatsPlayerChip(
-        { emoji: "🕳️", name: "Sin datos", color: "#B18A64" },
+        { emoji: "🕳️", name: tr("labels.none"), color: "#B18A64" },
         true,
       ),
     );
@@ -1994,12 +2399,12 @@ function renderStats() {
       : 0;
   refs.statsLastWinnerStatus.classList.remove("is-hot");
   if (!latest) {
-    refs.statsLastWinnerStatus.textContent = "Sin historial de salidas.";
+    refs.statsLastWinnerStatus.textContent = tr("labels.noHistory");
   } else if (currentStreakCount > 1) {
-    refs.statsLastWinnerStatus.textContent = `En racha 🔥 x${currentStreakCount}.`;
+    refs.statsLastWinnerStatus.textContent = tr("labels.onFireStreak", { count: currentStreakCount });
     refs.statsLastWinnerStatus.classList.add("is-hot");
   } else {
-    refs.statsLastWinnerStatus.textContent = "Sin racha activa.";
+    refs.statsLastWinnerStatus.textContent = tr("labels.noStreak");
   }
 
   refs.statsLongestStreak.replaceChildren();
@@ -2018,7 +2423,7 @@ function renderStats() {
   } else {
     const empty = document.createElement("p");
     empty.className = "stats-streak";
-    empty.textContent = "Sin rachas registradas.";
+    empty.textContent = tr("labels.noStreaksRecorded");
     refs.statsLongestStreak.append(empty);
   }
 
@@ -2047,7 +2452,7 @@ function renderStats() {
         }
         const displayA = resolveParticipantDisplay(a?.participantId, a?.snapshot);
         const displayB = resolveParticipantDisplay(b?.participantId, b?.snapshot);
-        return normalizeName(displayA.name).localeCompare(normalizeName(displayB.name), "es", {
+        return normalizeName(displayA.name).localeCompare(normalizeName(displayB.name), getCurrentLocale(), {
           sensitivity: "base",
         });
       });
@@ -2057,7 +2462,9 @@ function renderStats() {
 
     if (refs.statsTotalsToggle instanceof HTMLElement) {
       refs.statsTotalsToggle.hidden = !shouldTruncate;
-      refs.statsTotalsToggle.textContent = statsTotalsExpanded ? "Ver menos" : `Ver más (${sorted.length})`;
+      refs.statsTotalsToggle.textContent = statsTotalsExpanded
+        ? tr("labels.showLess")
+        : tr("labels.showMore", { count: sorted.length });
       refs.statsTotalsToggle.setAttribute("aria-expanded", String(statsTotalsExpanded));
     }
 
@@ -2106,10 +2513,10 @@ function renderStatsRecent() {
   }
 
   historyEntries.forEach((entry) => {
-    const tr = document.createElement("tr");
+    const row = document.createElement("tr");
     const dateTd = document.createElement("td");
     const timestamp = Math.max(0, Math.round(Number(entry?.timestamp) || 0));
-    const label = timestamp > 0 ? new Date(timestamp).toLocaleString("es") : "Sin fecha";
+    const label = timestamp > 0 ? new Date(timestamp).toLocaleString(getCurrentLocale()) : tr("labels.noDate");
     dateTd.textContent = label;
 
     const winnerTd = document.createElement("td");
@@ -2123,8 +2530,8 @@ function renderStatsRecent() {
     cell.append(buildStatsPlayerChip(display));
     winnerTd.append(cell);
 
-    tr.append(dateTd, winnerTd);
-    refs.statsRecentBody.append(tr);
+    row.append(dateTd, winnerTd);
+    refs.statsRecentBody.append(row);
   });
 
   refs.statsRecentWrap.hidden = false;
@@ -2146,7 +2553,7 @@ function buildStatsPlayerChip(rawDisplay, forceEmpty = false) {
   }
   if (isRemoved) {
     chip.classList.add("stats-player-chip-removed");
-    chip.title = "Ya no está en la ruleta";
+    chip.title = tr("labels.removedFromWheel");
   }
   chip.style.setProperty("--player-color", sanitizeColor(display.color));
 
@@ -2166,7 +2573,7 @@ function buildStatsPlayerChip(rawDisplay, forceEmpty = false) {
     const removedMark = document.createElement("span");
     removedMark.className = "stats-player-removed-mark";
     removedMark.textContent = "✝";
-    removedMark.title = "Ya no está en la ruleta";
+    removedMark.title = tr("labels.removedFromWheel");
     removedMark.setAttribute("aria-hidden", "true");
     chip.append(removedMark);
   }
@@ -2209,12 +2616,12 @@ function renderRetrySliceRow() {
   const emojiPlaceholder = document.createElement("span");
   emojiPlaceholder.className = "retry-placeholder retry-emoji-placeholder";
   emojiPlaceholder.textContent = RETRY_SLICE_EMOJI;
-  emojiPlaceholder.title = "Emoji fijo de la sección Tira otra vez";
-  emojiPlaceholder.setAttribute("aria-label", "Emoji fijo de la sección Tira otra vez");
+  emojiPlaceholder.title = tr("labels.retryFixedEmoji");
+  emojiPlaceholder.setAttribute("aria-label", tr("labels.retryFixedEmoji"));
 
   const nameTag = document.createElement("div");
   nameTag.className = "retry-name-tag";
-  nameTag.textContent = RETRY_SLICE_LABEL;
+  nameTag.textContent = getRetrySliceLabel();
   if (!enabled) {
     nameTag.classList.add("is-disabled");
   }
@@ -2223,8 +2630,8 @@ function renderRetrySliceRow() {
   colorButton.type = "button";
   colorButton.className = "color-swatch retry-color-swatch";
   colorButton.style.background = retryColor;
-  colorButton.title = "Color de la sección Tira otra vez";
-  colorButton.setAttribute("aria-label", "Color de la sección Tira otra vez");
+  colorButton.title = tr("labels.retryColor");
+  colorButton.setAttribute("aria-label", tr("labels.retryColor"));
   colorButton.disabled = isSpinning || !enabled;
   colorButton.addEventListener("click", () => {
     openColorModal(RETRY_SLICE_COLOR_INDEX);
@@ -2237,8 +2644,8 @@ function renderRetrySliceRow() {
   pctInput.min = String(MIN_RETRY_SLICE_PCT);
   pctInput.max = String(MAX_RETRY_SLICE_PCT);
   pctInput.value = String(retryPct);
-  pctInput.title = `Porcentaje de ${RETRY_SLICE_LABEL}`;
-  pctInput.setAttribute("aria-label", `Porcentaje de ${RETRY_SLICE_LABEL}`);
+  pctInput.title = tr("labels.retryPct");
+  pctInput.setAttribute("aria-label", tr("labels.retryPct"));
   pctInput.disabled = isSpinning || !enabled;
   pctInput.addEventListener("change", () => {
     setRetrySlicePct(pctInput.value);
@@ -2254,13 +2661,13 @@ function renderRetrySliceRow() {
   visibilityButton.className = "visibility-button";
   visibilityButton.textContent = enabled ? "👁" : "🙈";
   visibilityButton.title = enabled
-    ? "Ocultar sección Tira otra vez de la rula"
-    : "Mostrar sección Tira otra vez en la rula";
+    ? tr("labels.retryHide")
+    : tr("labels.retryShow");
   visibilityButton.setAttribute(
     "aria-label",
     enabled
-      ? "Ocultar sección Tira otra vez de la rula"
-      : "Mostrar sección Tira otra vez en la rula",
+      ? tr("labels.retryHide")
+      : tr("labels.retryShow"),
   );
   visibilityButton.disabled = isSpinning;
   visibilityButton.addEventListener("click", () => {
@@ -2442,7 +2849,7 @@ function syncEmojiModalPreview(emoji) {
   }
   const next = sanitizeEmoji(emoji, activeEmojiIndex ?? 0);
   refs.emojiSelectedPreview.textContent = next;
-  refs.emojiSelectedPreview.setAttribute("aria-label", `Emoji seleccionado: ${next}`);
+  refs.emojiSelectedPreview.setAttribute("aria-label", tr("emojis.selectedEmoji", { emoji: next }));
 }
 
 function stopEmojiModalPreviewHose(clearNodes = false) {
@@ -2969,17 +3376,18 @@ function formatSpinEntryLabel(entry) {
 }
 
 function formatRetryWheelLabel() {
+  const retryLabel = getRetrySliceLabel();
   const mode = sanitizeWheelEmojiMode(state.wheelEmojiMode);
   if (mode === "none") {
-    return RETRY_SLICE_LABEL;
+    return retryLabel;
   }
   if (mode === "prefix") {
-    return `${RETRY_SLICE_EMOJI} ${RETRY_SLICE_LABEL}`.trim();
+    return `${RETRY_SLICE_EMOJI} ${retryLabel}`.trim();
   }
   if (mode === "suffix") {
-    return `${RETRY_SLICE_LABEL} ${RETRY_SLICE_EMOJI}`.trim();
+    return `${retryLabel} ${RETRY_SLICE_EMOJI}`.trim();
   }
-  return `${RETRY_SLICE_EMOJI} ${RETRY_SLICE_LABEL} ${RETRY_SLICE_EMOJI}`.trim();
+  return `${RETRY_SLICE_EMOJI} ${retryLabel} ${RETRY_SLICE_EMOJI}`.trim();
 }
 
 function getSpinEntryColor(entry) {
@@ -3049,12 +3457,12 @@ function spinWheel() {
   }
   const visibleParticipants = getVisibleItems();
   if (visibleParticipants.length < MIN_PARTICIPANTS) {
-    setMessage("La rula necesita al menos 2 participantes visibles.", "error");
+    setMessage(tr("messages.spinNeedsTwoVisible"), "error");
     return;
   }
   const spinEntries = getSpinEntries();
   if (spinEntries.length < MIN_PARTICIPANTS) {
-    setMessage("No hay suficientes secciones disponibles para girar.", "error");
+    setMessage(tr("messages.spinNotEnoughSections"), "error");
     return;
   }
 
@@ -3064,7 +3472,7 @@ function spinWheel() {
   resumeAudioContext();
   triggerPointerTick();
   setControlsDisabled(true);
-  refs.resultText.textContent = "Girando...";
+  refs.resultText.textContent = tr("status.spinning");
   setMessage("");
 
   const winnerIndex = selectWinnerIndexForRoundMode(spinEntries);
@@ -3072,8 +3480,8 @@ function spinWheel() {
     setControlsDisabled(false);
     isSpinning = false;
     setRimLightMode(RIM_LIGHT_MODE.STANDBY);
-    setMessage("No hay secciones visibles para girar.", "error");
-    refs.resultText.textContent = "Mostra al menos 2 participantes visibles para girar.";
+    setMessage(tr("messages.spinNoVisibleForWinner"), "error");
+    refs.resultText.textContent = tr("status.notEnoughVisibleToSpin");
     return;
   }
   const durationSec = randomInt(state.spinDurationMinSec, state.spinDurationMaxSec);
@@ -3145,8 +3553,8 @@ function finalizeSpin(stoppedByClick) {
     isSpinning = false;
     activeSpin = null;
     setControlsDisabled(false);
-    refs.resultText.textContent = "No hay secciones visibles en la rula.";
-    setMessage("No se pudo resolver resultado porque no hay secciones visibles.", "error");
+    refs.resultText.textContent = tr("status.noVisibleSections");
+    setMessage(tr("messages.spinResolveNoSections"), "error");
     return;
   }
   const winnerIndex = getWinnerIndexFromRotation(currentRotationDeg, spinEntries);
@@ -3158,9 +3566,10 @@ function finalizeSpin(stoppedByClick) {
   setControlsDisabled(false);
 
   if (winnerEntry?.type === "retry") {
+    const retryLabel = getRetrySliceLabel();
     refs.resultText.textContent = stoppedByClick
-      ? `${RETRY_SLICE_LABEL}. Volve a girar.`
-      : `${RETRY_SLICE_LABEL}. Nadie gana esta ronda.`;
+      ? tr("status.retrySpinAgain", { retryLabel })
+      : tr("status.retryNobodyWins", { retryLabel });
     playFailureTone();
     const celebrationDurationMs = triggerRetryFailureCelebration();
     startWinnerLights(Math.max(1000, celebrationDurationMs));
@@ -3169,8 +3578,8 @@ function finalizeSpin(stoppedByClick) {
 
   const winnerItem = winnerEntry?.item;
   if (!winnerItem || typeof winnerItem !== "object") {
-    refs.resultText.textContent = "No se pudo resolver un ganador valido.";
-    setMessage("Ocurrió un problema al registrar el resultado del giro.", "error");
+    refs.resultText.textContent = tr("status.noValidWinner");
+    setMessage(tr("messages.spinResolveError"), "error");
     return;
   }
   applyRoundModeAfterWinner(winnerItem);
@@ -3180,7 +3589,7 @@ function finalizeSpin(stoppedByClick) {
   recordSpinHistoryWinner(winnerItem);
   recordWinner(winnerItem);
   const winnerLabel = formatParticipantLabel(winnerItem);
-  refs.resultText.textContent = `Ganó ${winnerLabel}.`;
+  refs.resultText.textContent = tr("status.winner", { winnerLabel });
   playSpinEndFanfare();
   playWinApplause();
   const celebrationDurationMs = triggerWinnerCelebration(winnerItem);
@@ -3720,7 +4129,7 @@ function ensureRimLightAnimationLoop() {
 
 function addParticipant() {
   if (state.items.length >= MAX_PARTICIPANTS) {
-    setMessage(`Máximo ${MAX_PARTICIPANTS} participantes por configuración.`, "error");
+    setMessage(tr("messages.addParticipantMax", { max: MAX_PARTICIPANTS }), "error");
     return;
   }
 
@@ -3728,7 +4137,7 @@ function addParticipant() {
   state.items.push({
     id: makeId(),
     emoji: sanitizeEmoji(undefined, number - 1),
-    name: normalizeName(`Jugador ${number}`, number - 1),
+    name: normalizeName("", number - 1),
     color: PALETTE[(number - 1) % PALETTE.length],
     animationMode: DEFAULT_PARTICIPANT_ANIMATION_MODE,
     hidden: false,
@@ -3748,7 +4157,7 @@ function addParticipant() {
   state.roundCycleRemainingIds = [];
   saveState();
   render();
-  setMessage("Participante agregado y porcentajes equilibrados.", "success");
+  setMessage(tr("messages.addParticipantSuccess"), "success");
 }
 
 function equalizeParticipantPercentages() {
@@ -3757,7 +4166,7 @@ function equalizeParticipantPercentages() {
   }
   const visibleItems = getVisibleItems(state.items);
   if (visibleItems.length < MIN_PARTICIPANTS) {
-    setMessage("La rula necesita al menos 2 participantes visibles.", "error");
+    setMessage(tr("messages.equalizeNeedsTwoVisible"), "error");
     return;
   }
   equalizePercentages(
@@ -3770,12 +4179,12 @@ function equalizeParticipantPercentages() {
   state.roundCycleRemainingIds = [];
   saveState();
   render();
-  setMessage("Porcentajes de participantes igualados.", "success");
+  setMessage(tr("messages.equalizeSuccess"), "success");
 }
 
 function removeParticipant(index) {
   if (state.items.length <= MIN_PARTICIPANTS) {
-    setMessage("No se puede bajar de 2 participantes.", "error");
+    setMessage(tr("messages.removeNeedsTwo"), "error");
     return;
   }
   state.items.splice(index, 1);
@@ -3787,7 +4196,7 @@ function removeParticipant(index) {
   );
   saveState();
   render();
-  setMessage("Participante eliminado.", "success");
+  setMessage(tr("messages.removeSuccess"), "success");
 }
 
 function applyBulkParticipantsInput(rawText, mode = "append") {
@@ -3796,7 +4205,7 @@ function applyBulkParticipantsInput(rawText, mode = "append") {
   }
   const parsed = parseBulkParticipants(rawText);
   if (parsed.length === 0) {
-    setMessage("No se encontraron participantes validos en la lista.", "error");
+    setMessage(tr("messages.bulkNoValidParticipants"), "error");
     return false;
   }
 
@@ -3827,7 +4236,7 @@ function applyBulkParticipantsInput(rawText, mode = "append") {
     });
 
     if (nextItems.length < MIN_PARTICIPANTS) {
-      setMessage("Para reemplazar se necesitan al menos 2 participantes validos.", "error");
+      setMessage(tr("messages.bulkReplaceNeedsTwo"), "error");
       return false;
     }
 
@@ -3840,7 +4249,7 @@ function applyBulkParticipantsInput(rawText, mode = "append") {
     );
     saveState();
     render();
-    setMessage(`Se reemplazo la lista con ${nextItems.length} participantes.`, "success");
+    setMessage(tr("messages.bulkReplaceSuccess", { count: nextItems.length }), "success");
     return true;
   }
 
@@ -3873,7 +4282,7 @@ function applyBulkParticipantsInput(rawText, mode = "append") {
   });
 
   if (added === 0) {
-    setMessage("No se agregaron participantes (duplicados o límite alcanzado).", "error");
+    setMessage(tr("messages.bulkNoAdded"), "error");
     return false;
   }
 
@@ -3885,7 +4294,7 @@ function applyBulkParticipantsInput(rawText, mode = "append") {
   );
   saveState();
   render();
-  setMessage(`Se agregaron ${added} participantes desde la lista.`, "success");
+  setMessage(tr("messages.bulkAdded", { count: added }), "success");
   return true;
 }
 
@@ -3894,13 +4303,13 @@ function parseBulkParticipants(rawText) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
-    .map((line) => {
+    .map((line, index) => {
       const grapheme = firstGrapheme(line);
       if (isLikelyEmoji(grapheme)) {
         const rest = line.slice(grapheme.length).trim();
         return {
           emoji: grapheme,
-          name: rest || "Jugador",
+          name: rest || normalizeName("", index),
         };
       }
       return {
@@ -3935,17 +4344,17 @@ function exportCurrentConfig(options = {}) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  const configLabel = includeConfig ? "con-config" : "sin-config";
-  const statsLabel = includeStats ? "con-stats" : "sin-stats";
+  const configLabel = includeConfig ? "with-config" : "without-config";
+  const statsLabel = includeStats ? "with-stats" : "without-stats";
   anchor.download = `toca-toca-backup-${configLabel}-${statsLabel}.json`;
   document.body.append(anchor);
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(url);
-  setMessage(
-    `Backup exportado (${includeConfig ? "con configuración" : "sin configuración"}, ${includeStats ? "con estadísticas" : "sin estadísticas"}).`,
-    "success",
-  );
+  setMessage(tr("messages.exportSuccess", {
+    configText: includeConfig ? tr("exportFlags.configOn") : tr("exportFlags.configOff"),
+    statsText: includeStats ? tr("exportFlags.statsOn") : tr("exportFlags.statsOff"),
+  }), "success");
 }
 
 function looksLikeConfigPayload(input) {
@@ -4076,14 +4485,14 @@ async function importConfigFromFile() {
     stats = loadStats();
     render();
     if (importedConfig && importedStats) {
-      setMessage("Importación aplicada: configuración + estadísticas.", "success");
+      setMessage(tr("messages.importAppliedBoth"), "success");
     } else if (importedConfig) {
-      setMessage("Importación aplicada: configuración.", "success");
+      setMessage(tr("messages.importAppliedConfig"), "success");
     } else {
-      setMessage("Importación aplicada: estadísticas.", "success");
+      setMessage(tr("messages.importAppliedStats"), "success");
     }
   } catch (_error) {
-    setMessage("No se pudo importar el archivo seleccionado.", "error");
+    setMessage(tr("messages.importFailed"), "error");
   } finally {
     input.value = "";
     importIncludeConfigOnNextFile = true;
@@ -4092,7 +4501,10 @@ async function importConfigFromFile() {
 }
 
 function resetConfigScope() {
-  const defaults = defaultState();
+  const defaults = defaultState(getCurrentLanguage());
+  state.language = defaults.language;
+  state.customTitle = defaults.customTitle;
+  state.customSubtitle = defaults.customSubtitle;
   state.spinDurationMinSec = defaults.spinDurationMinSec;
   state.spinDurationMaxSec = defaults.spinDurationMaxSec;
   state.textLayout = defaults.textLayout;
@@ -4115,7 +4527,7 @@ function resetConfigScope() {
 }
 
 function resetUsersScope() {
-  const defaults = defaultState();
+  const defaults = defaultState(getCurrentLanguage());
   state.items = defaults.items.map((item) => ({ ...item }));
   hiddenParticipantPctById.clear();
   state.roundCycleRemainingIds = [];
@@ -4187,25 +4599,25 @@ function applyResetScopes(scopes) {
 function describeResetScopes(scopes) {
   if (scopes.config && scopes.users && scopes.history) {
     return {
-      resultText: "Todo restablecido. Listo para girar.",
-      message: "Se restablecio todo.",
+      resultText: tr("status.resetAllResult"),
+      message: tr("messages.resetAllMessage"),
     };
   }
 
   const labels = [];
   if (scopes.config) {
-    labels.push("configuración");
+    labels.push(tr("resetScopes.config"));
   }
   if (scopes.users) {
-    labels.push("usuarios");
+    labels.push(tr("resetScopes.users"));
   }
   if (scopes.history) {
-    labels.push("historial");
+    labels.push(tr("resetScopes.history"));
   }
   const joined = labels.join(", ");
   return {
-    resultText: `Restablecimiento aplicado: ${joined}.`,
-    message: `Se restablecio ${joined}.`,
+    resultText: tr("status.resetAppliedResult", { joined }),
+    message: tr("messages.resetAppliedMessage", { joined }),
   };
 }
 
@@ -4259,6 +4671,53 @@ function setWheelEmojiMode(rawValue) {
   drawWheel();
 }
 
+function setLanguage(rawValue) {
+  const next = sanitizeLanguage(rawValue, getCurrentLanguage());
+  if (next === getCurrentLanguage()) {
+    if (refs.languageSelect instanceof HTMLSelectElement) {
+      refs.languageSelect.value = next;
+    }
+    return;
+  }
+  state.language = next;
+  applyStaticTranslations();
+  initLanguageSelector();
+  initFontSelector();
+  initWinnerAnimationSelector();
+  initColorModal();
+  refreshEmojiCatalogData(loadEmojiCatalog());
+  if (refs.emojiModal.hidden) {
+    renderEmojiSections("");
+  } else {
+    renderEmojiSections(refs.emojiSearchInput.value);
+    syncEmojiModalPreview(activeEmojiDraft || refs.emojiSelectedPreview.textContent);
+  }
+  saveState();
+  render();
+}
+
+function setCustomHeroTitle(rawValue) {
+  const next = sanitizeHeroTitle(rawValue);
+  if (next === sanitizeHeroTitle(state.customTitle)) {
+    renderHeroTexts();
+    return;
+  }
+  state.customTitle = next;
+  saveState();
+  renderHeroTexts();
+}
+
+function setCustomHeroSubtitle(rawValue) {
+  const next = sanitizeHeroSubtitle(rawValue);
+  if (next === sanitizeHeroSubtitle(state.customSubtitle)) {
+    renderHeroTexts();
+    return;
+  }
+  state.customSubtitle = next;
+  saveState();
+  renderHeroTexts();
+}
+
 function setTextPosition(rawValue) {
   const next = sanitizeTextPosition(rawValue);
   if (next === state.textPositionPct) {
@@ -4289,7 +4748,7 @@ function applyAutoTextTuning() {
   }
   const tuning = computeAutoTextTuning();
   if (!tuning) {
-    setMessage("No se pudo calcular un ajuste automático.", "error");
+    setMessage(tr("messages.autoTuneError"), "error");
     return;
   }
   const nextPosition = sanitizeTextPosition(tuning.textPositionPct);
@@ -4303,10 +4762,13 @@ function applyAutoTextTuning() {
   drawWheel();
 
   if (changed) {
-    setMessage(`Ajuste aplicado: posición ${nextPosition}% y fuente ${nextFontSize}px.`, "success");
+    setMessage(tr("messages.autoTuneApplied", {
+      position: nextPosition,
+      fontSize: nextFontSize,
+    }), "success");
     return;
   }
-  setMessage("La posición y el tamaño ya estaban optimizados.", "success");
+  setMessage(tr("messages.autoTuneNoChange"), "success");
 }
 
 function computeAutoTextTuning() {
@@ -4474,7 +4936,7 @@ function setParticipantHidden(index, hidden) {
     return;
   }
   if (nextHidden && getVisibleParticipantCount(state.items) <= MIN_PARTICIPANTS) {
-    setMessage("La rula necesita al menos 2 participantes visibles.", "error");
+    setMessage(tr("messages.equalizeNeedsTwoVisible"), "error");
     return;
   }
   const participantId = sanitizeStatsParticipantId(state.items[index]?.id);
@@ -4702,18 +5164,18 @@ function distributeUnits(weights, targetUnits) {
 function loadState() {
   const cookieConfig = safeParse(readCookie(COOKIE_KEY));
   if (cookieConfig) {
-    return sanitizeState(cookieConfig);
+    return sanitizeState(cookieConfig, { fallbackLanguage: DEFAULT_LANGUAGE });
   }
 
   const storageConfig = safeParse(safeLocalGet(STORAGE_KEY));
   if (storageConfig) {
-    return sanitizeState(storageConfig);
+    return sanitizeState(storageConfig, { fallbackLanguage: DEFAULT_LANGUAGE });
   }
 
-  return defaultState();
+  return defaultState(detectPreferredLanguage());
 }
 
-function defaultState() {
+function defaultState(language = DEFAULT_LANGUAGE) {
   const items = DEFAULT_PARTICIPANTS.map((participant, index) => ({
     id:
       typeof participant?.id === "string" && participant.id.trim()
@@ -4729,6 +5191,9 @@ function defaultState() {
   equalizePercentages(items);
   return {
     version: CONFIG_VERSION,
+    language: sanitizeLanguage(language, DEFAULT_LANGUAGE),
+    customTitle: "",
+    customSubtitle: "",
     spinDurationMinSec: DEFAULT_SPIN_DURATION_MIN,
     spinDurationMaxSec: DEFAULT_SPIN_DURATION_MAX,
     textLayout: DEFAULT_TEXT_LAYOUT,
@@ -4748,8 +5213,9 @@ function defaultState() {
   };
 }
 
-function sanitizeState(input) {
-  const fallback = defaultState();
+function sanitizeState(input, options = {}) {
+  const fallbackLanguage = sanitizeLanguage(options?.fallbackLanguage, DEFAULT_LANGUAGE);
+  const fallback = defaultState(fallbackLanguage);
   const legacyDuration = input?.spinDurationSec;
   const durationMinRaw = input?.spinDurationMinSec ?? legacyDuration;
   const durationMaxRaw = input?.spinDurationMaxSec ?? legacyDuration;
@@ -4784,6 +5250,9 @@ function sanitizeState(input) {
   normalizeVisiblePercentages(items, getParticipantSharePctForConfig(retryEnabled, retryPct));
   return {
     version: CONFIG_VERSION,
+    language: sanitizeLanguage(input?.language, fallbackLanguage),
+    customTitle: sanitizeHeroTitle(input?.customTitle),
+    customSubtitle: sanitizeHeroSubtitle(input?.customSubtitle),
     spinDurationMinSec: durationMin,
     spinDurationMaxSec: durationMax,
     textLayout: sanitizeTextLayout(input?.textLayout),
@@ -4804,9 +5273,12 @@ function sanitizeState(input) {
 }
 
 function saveState() {
-  state = sanitizeState(state);
+  state = sanitizeState(state, { fallbackLanguage: getCurrentLanguage() });
   const payload = JSON.stringify({
     version: CONFIG_VERSION,
+    language: sanitizeLanguage(state.language, getCurrentLanguage()),
+    customTitle: sanitizeHeroTitle(state.customTitle),
+    customSubtitle: sanitizeHeroSubtitle(state.customSubtitle),
     spinDurationMinSec: sanitizeSpinDurationValue(state.spinDurationMinSec),
     spinDurationMaxSec: sanitizeSpinDurationValue(state.spinDurationMaxSec),
     textLayout: sanitizeTextLayout(state.textLayout),
@@ -4843,14 +5315,14 @@ function saveState() {
   }
 
   if (!wroteCookie) {
-    setMessage("Cookie no disponible. Se guardó en almacenamiento local.", "error");
+    setMessage(tr("messages.cookieFallback"), "error");
   }
 
   try {
     localStorage.setItem(STORAGE_KEY, payload);
   } catch (_error) {
     if (!wroteCookie) {
-      setMessage("No se pudo guardar la configuración local.", "error");
+      setMessage(tr("messages.localSaveFailed"), "error");
     }
   }
 }
@@ -5244,6 +5716,85 @@ function createFallbackStateStoreApi() {
   };
 }
 
+function createFallbackI18nApi() {
+  const defaultLanguage = "es";
+  const supportedLanguages = ["es", "en", "pt-BR"];
+  const languageOptions = [
+    { value: "es", label: "\uD83C\uDDEA\uD83C\uDDF8 Espanol" },
+    { value: "en", label: "\uD83C\uDDEC\uD83C\uDDE7 English" },
+    { value: "pt-BR", label: "\uD83C\uDDE7\uD83C\uDDF7 Portugues (Brasil)" },
+  ];
+
+  function interpolate(template, params = {}) {
+    return String(template).replace(/\{([a-zA-Z0-9_]+)\}/g, (full, key) => {
+      if (!Object.prototype.hasOwnProperty.call(params, key)) {
+        return full;
+      }
+      return String(params[key]);
+    });
+  }
+
+  function sanitize(rawValue, fallback = defaultLanguage) {
+    const safeFallback = supportedLanguages.includes(fallback) ? fallback : defaultLanguage;
+    if (typeof rawValue !== "string" || !rawValue.trim()) {
+      return safeFallback;
+    }
+    const value = rawValue.trim();
+    if (supportedLanguages.includes(value)) {
+      return value;
+    }
+    const normalized = value.toLowerCase().replace("_", "-");
+    if (normalized === "pt" || normalized === "pt-br" || normalized.startsWith("pt-")) {
+      return "pt-BR";
+    }
+    if (normalized === "en" || normalized.startsWith("en-")) {
+      return "en";
+    }
+    if (normalized === "es" || normalized.startsWith("es-")) {
+      return "es";
+    }
+    return safeFallback;
+  }
+
+  function detectPreferred() {
+    const candidates =
+      Array.isArray(globalThis?.navigator?.languages) && globalThis.navigator.languages.length > 0
+        ? globalThis.navigator.languages
+        : [globalThis?.navigator?.language].filter(Boolean);
+    for (let index = 0; index < candidates.length; index += 1) {
+      const candidate = sanitize(candidates[index], "");
+      if (candidate && supportedLanguages.includes(candidate)) {
+        return candidate;
+      }
+    }
+    return defaultLanguage;
+  }
+
+  function toLocale(language) {
+    const safeLanguage = sanitize(language);
+    if (safeLanguage === "pt-BR") {
+      return "pt-BR";
+    }
+    if (safeLanguage === "en") {
+      return "en-US";
+    }
+    return "es";
+  }
+
+  return {
+    DEFAULT_LANGUAGE: defaultLanguage,
+    SUPPORTED_LANGUAGES: supportedLanguages,
+    LANGUAGE_OPTIONS: languageOptions,
+    sanitizeLanguage: sanitize,
+    detectPreferredLanguage: detectPreferred,
+    toLocale,
+    t(language, key, params = {}) {
+      void language;
+      return interpolate(key, params);
+    },
+  };
+}
+
 function safeLocalGet(key) {
   try {
     return localStorage.getItem(key);
@@ -5345,6 +5896,15 @@ function setControlsDisabled(disabled) {
   }
   refs.winAnimationSelect.disabled = disabled;
   refs.reduceMotionToggle.disabled = disabled;
+  if (refs.languageSelect instanceof HTMLSelectElement) {
+    refs.languageSelect.disabled = disabled;
+  }
+  if (refs.heroTitleInput instanceof HTMLInputElement) {
+    refs.heroTitleInput.disabled = disabled;
+  }
+  if (refs.heroSubtitleInput instanceof HTMLInputElement) {
+    refs.heroSubtitleInput.disabled = disabled;
+  }
   updateResetConfirmAcceptState();
   renderItemList();
 }
@@ -5366,6 +5926,30 @@ function isEditableTarget(target) {
     return true;
   }
   return target.isContentEditable;
+}
+
+function sanitizeLanguage(value, fallback = DEFAULT_LANGUAGE) {
+  if (typeof i18nApi?.sanitizeLanguage === "function") {
+    return i18nApi.sanitizeLanguage(value, fallback);
+  }
+  return fallback;
+}
+
+function sanitizeHeroTitle(value) {
+  const raw = typeof value === "string" ? value : "";
+  return raw.trim().slice(0, MAX_HERO_TITLE_LENGTH);
+}
+
+function sanitizeHeroSubtitle(value) {
+  const raw = typeof value === "string" ? value : "";
+  return raw.trim().slice(0, MAX_HERO_SUBTITLE_LENGTH);
+}
+
+function detectPreferredLanguage() {
+  if (typeof i18nApi?.detectPreferredLanguage === "function") {
+    return sanitizeLanguage(i18nApi.detectPreferredLanguage(), DEFAULT_LANGUAGE);
+  }
+  return DEFAULT_LANGUAGE;
 }
 
 function sanitizeSpinDurationValue(value) {
@@ -5526,7 +6110,7 @@ function getSpinEntries() {
   if (retryEnabled && retryPct > 0) {
     entries.push({
       type: "retry",
-      label: RETRY_SLICE_LABEL,
+      label: getRetrySliceLabel(),
       color: sanitizeRetrySliceColor(state.retrySliceColor),
       pct: retryPct,
     });
@@ -5578,10 +6162,17 @@ function getParticipantTargetUnits(visibleCount, participantSharePct = 100) {
   return Math.max(minUnits, desiredUnits);
 }
 
+function getDefaultParticipantName(index = 0) {
+  const numericIndex = Math.max(0, Math.floor(Number(index) || 0)) + 1;
+  const fallback = `Jugador ${numericIndex}`;
+  const translated = tr("labels.defaultParticipant", { index: numericIndex });
+  return translated && translated !== "labels.defaultParticipant" ? translated : fallback;
+}
+
 function normalizeName(rawName, index = 0) {
   const asString = typeof rawName === "string" ? rawName : "";
   const trimmed = asString.trim().slice(0, MAX_PARTICIPANT_NAME_LENGTH);
-  return trimmed || `Jugador ${index + 1}`;
+  return trimmed || getDefaultParticipantName(index);
 }
 
 function sanitizeColor(rawColor, index = 0) {
@@ -5814,7 +6405,9 @@ function buildEmojiTooltipTitle(emoji, esName, enName) {
 
 function buildEmojiAriaLabel(emoji, meta) {
   const preferred = meta?.es || meta?.en || "";
-  return preferred ? `Elegir emoji ${emoji}: ${preferred}` : `Elegir emoji ${emoji}`;
+  return preferred
+    ? tr("emojis.chooseEmojiNamed", { emoji, name: preferred })
+    : tr("emojis.chooseEmoji", { emoji });
 }
 
 function pickRandomColorFromPalette() {
@@ -5845,7 +6438,7 @@ function buildEmojiSections(catalog) {
   const sections = [
     {
       id: "favoritos",
-      label: "Favoritos en uso",
+      label: tr("emojis.favoritesInUse"),
       keywords: ["favoritos", "usados", "participantes", "top"],
       items: Array.from(new Set(favorites)),
     },
@@ -5862,7 +6455,7 @@ function buildEmojiSections(catalog) {
     }
     const groupLabelEs = typeof group.labelEs === "string" && group.labelEs.trim() ? group.labelEs.trim() : "";
     const groupLabelEn = typeof group.labelEn === "string" && group.labelEn.trim() ? group.labelEn.trim() : "";
-    const groupLabel = groupLabelEs || groupLabelEn || "Grupo";
+    const groupLabel = groupLabelEs || groupLabelEn || "Group";
 
     group.subgroups.forEach((subgroup) => {
       if (!subgroup || typeof subgroup !== "object" || !Array.isArray(subgroup.items)) {
@@ -5872,7 +6465,7 @@ function buildEmojiSections(catalog) {
         typeof subgroup.labelEs === "string" && subgroup.labelEs.trim() ? subgroup.labelEs.trim() : "";
       const subgroupLabelEn =
         typeof subgroup.labelEn === "string" && subgroup.labelEn.trim() ? subgroup.labelEn.trim() : "";
-      const subgroupLabel = subgroupLabelEs || subgroupLabelEn || "Subgrupo";
+      const subgroupLabel = subgroupLabelEs || subgroupLabelEn || "Subgroup";
       const items = [];
 
       subgroup.items.forEach((rawEmoji) => {

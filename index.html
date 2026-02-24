@@ -77,8 +77,8 @@
     <main class="page">
       <section class="wheel-card">
         <header class="hero">
-          <h1>Toca Toca</h1>
-          <p class="subtitle">la suerte es loca</p>
+          <h1 id="heroTitle">Toca Toca</h1>
+          <p id="heroSubtitle" class="subtitle">la suerte es loca</p>
         </header>
 
         <div class="wheel-wrap">
@@ -113,6 +113,16 @@
       <div class="config-body">
         <section class="panel-settings panel-settings-static">
           <h3 class="panel-settings-title">Configuración de rula</h3>
+
+          <div class="text-layout-control">
+            <label id="heroTitleInputLabel" for="heroTitleInput">Título de la rula</label>
+            <input id="heroTitleInput" type="text" maxlength="40" placeholder="Toca Toca" />
+          </div>
+
+          <div class="text-layout-control">
+            <label id="heroSubtitleInputLabel" for="heroSubtitleInput">Subtítulo de la rula</label>
+            <input id="heroSubtitleInput" type="text" maxlength="80" placeholder="la suerte es loca" />
+          </div>
 
           <div class="duration-control">
             <label id="durationLabel" for="durationRangeMin">Duración aleatoria: 20s - 40s</label>
@@ -246,7 +256,7 @@
 
           <div class="text-layout-control reduce-motion-control">
             <div class="reduce-motion-heading">
-              <label for="reduceMotionToggle">Reducir animaciones</label>
+              <label id="reduceMotionLabel" for="reduceMotionToggle">Reducir animaciones</label>
               <span class="reduce-motion-joke" aria-hidden="true">🐇 vs 🐢</span>
             </div>
             <label class="animal-toggle" for="reduceMotionToggle">
@@ -261,6 +271,14 @@
               </span>
               <span class="animal-toggle-option animal-slow" aria-hidden="true">🐢</span>
             </label>
+          </div>
+          <div class="text-layout-control">
+            <label id="languageSelectLabel" for="languageSelect">Idioma</label>
+            <select id="languageSelect" aria-label="Idioma">
+              <option value="es">&#x1F1EA;&#x1F1F8; Espanol</option>
+              <option value="en">&#x1F1EC;&#x1F1E7; English</option>
+              <option value="pt-BR">&#x1F1E7;&#x1F1F7; Portugues (Brasil)</option>
+            </select>
           </div>
         </section>
 
@@ -514,10 +532,12 @@
 
         <section class="info-block">
           <h4>Toca Toca</h4>
-          <p>Rula de nombres personalizable.</p>
-          <p><strong>Versión actual:</strong> <span id="infoVersionText">v1.2.0</span></p>
+          <p id="infoDescriptionText">Rula de nombres personalizable.</p>
           <p>
-            Creado por
+            <strong id="infoVersionLabel">Versión actual:</strong> <span id="infoVersionText">v1.2.0</span>
+          </p>
+          <p>
+            <span id="infoCreatedByText">Creado por</span>
             <a href="https://github.com/facundoraulbistolfi" target="_blank" rel="noopener noreferrer">Facundo Bistolfi</a>
             🧉
             <button
@@ -531,7 +551,7 @@
             </button>.
           </p>
           <p>
-            Desarrollado con ayuda de
+            <span id="infoBuiltWithText">Desarrollado con ayuda de</span>
             <a href="https://openai.com/codex" target="_blank" rel="noopener noreferrer">Codex</a>
             <span class="codex-mark" aria-hidden="true">⬢</span>.
           </p>
@@ -809,6 +829,7 @@
       </section>
     </div>
     <script src="emoji-catalog.js" defer></script>
+    <script src="lib/i18n.js" defer></script>
     <script src="app.js" defer></script>
   </body>
 </html>

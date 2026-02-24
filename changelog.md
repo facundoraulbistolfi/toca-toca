@@ -1,8 +1,22 @@
 # Changelog
 
-## Versión actual: v1.2.0
+## Versión actual: v1.3.0
 
 Fecha de corte: 24 de febrero de 2026
+
+## v1.3.0 - 2026-02-24
+
+### Internacionalización (i18n)
+
+- Nuevo selector de idioma en `Configuración` con soporte para `es`, `en` y `pt-BR`.
+- Primera visita: detección automática por idioma del navegador con fallback a `es`.
+- Preferencia de idioma persistida en cookie + `localStorage` e incluida en backups de configuración.
+- Compatibilidad retroactiva para backups legacy sin campo de idioma.
+
+### Experiencia y personalización
+
+- Header de la ruleta configurable por el usuario.
+- Ajustes de textos y etiquetas para mantener consistencia entre idiomas.
 
 ## v1.2.0 - 2026-02-24
 
