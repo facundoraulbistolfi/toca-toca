@@ -6,13 +6,13 @@ App web estilo casino para decidir a quién le toca, con una ruleta totalmente c
 
 URL pública: [https://facundoraulbistolfi.github.io/toca-toca/](https://facundoraulbistolfi.github.io/toca-toca/)
 
-[![Versión](https://img.shields.io/badge/version-v1.2.0-0a7f5a.svg)](./changelog.md)
+[![Versión](https://img.shields.io/badge/version-v1.2.1-0a7f5a.svg)](./changelog.md)
 [![Estado](https://img.shields.io/badge/estado-productiva-1f8f5f.svg)](./changelog.md)
 [![Stack](https://img.shields.io/badge/stack-HTML%20%7C%20CSS%20%7C%20JS-informational.svg)](#tecnologías-usadas)
 
 ## Versión actual
 
-`v1.2.0`
+`v1.2.1`
 
 ## Autor y créditos
 
@@ -80,6 +80,7 @@ No compartas datos personales o sensibles en los issues.
 - `emoji-catalog.js`: catálogo local de emojis (Unicode/CLDR)
 - `scripts/generate-emoji-catalog.mjs`: script de regeneración del catálogo
 - `favicon.svg`: ícono del sitio
+- `docs/codex-context.md`: contexto persistente para decisiones de producto y técnica
 - `changelog.md`: historial de versiones
 
 ## Ejecutar en local

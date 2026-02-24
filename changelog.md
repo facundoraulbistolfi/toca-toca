@@ -1,8 +1,21 @@
 # Changelog
 
-## Versión actual: v1.2.0
+## Versión actual: v1.2.1
 
 Fecha de corte: 24 de febrero de 2026
+
+## v1.2.1 - 2026-02-24
+
+### Documentación y mantenimiento
+
+- Se agregó `docs/codex-context.md` como fuente única de contexto para Codex.
+- El documento consolida:
+  - objetivo y no-objetivos del producto
+  - decisiones cerradas de UX
+  - invariantes de negocio y límites operativos
+  - contrato de persistencia, import/export y migraciones
+  - checklist de regresión y backlog abierto
+- README actualizado para reflejar la nueva versión y referenciar el documento de contexto.
 
 ## v1.2.0 - 2026-02-24
 
