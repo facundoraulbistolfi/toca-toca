@@ -4,22 +4,49 @@ title: "[Idea]: "
 labels:
   - enhancement
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Compartí la propuesta con foco en problema, valor y cómo validar el resultado.
   - type: textarea
     id: propuesta
     attributes:
       label: Propuesta
-      description: Explica la mejora que te gustaria ver.
-      placeholder: Me gustaria sumar...
+      description: Explicá la mejora que te gustaría ver.
+      placeholder: Me gustaría sumar...
     validations:
       required: true
   - type: textarea
-    id: beneficio
+    id: problema_actual
     attributes:
-      label: Beneficio esperado
-      description: Que problema resuelve o que valor aporta?
-      placeholder: Esto ayudaria a...
+      label: Problema actual
+      description: ¿Qué fricción o necesidad concreta resuelve esta idea?
+      placeholder: Hoy cuesta...
     validations:
       required: true
+  - type: textarea
+    id: beneficio_esperado
+    attributes:
+      label: Beneficio esperado
+      description: ¿Qué valor aporta para quienes usan la app?
+      placeholder: Esto ayudaría a...
+    validations:
+      required: true
+  - type: textarea
+    id: criterios_exito
+    attributes:
+      label: Criterios de éxito (opcional)
+      description: ¿Cómo sabríamos que la mejora funcionó?
+      placeholder: Se considera resuelto cuando...
+    validations:
+      required: false
+  - type: textarea
+    id: alternativas
+    attributes:
+      label: Alternativas consideradas (opcional)
+      description: Otras opciones evaluadas y por qué no alcanzan.
+    validations:
+      required: false
   - type: textarea
     id: contexto
     attributes:
@@ -30,7 +57,7 @@ body:
   - type: checkboxes
     id: privacidad
     attributes:
-      label: Confirmacion de privacidad
+      label: Confirmación de privacidad
       options:
-        - label: Entiendo que este issue es publico y no incluye datos personales o sensibles.
+        - label: Entiendo que este issue es público y no incluye datos personales o sensibles.
           required: true
