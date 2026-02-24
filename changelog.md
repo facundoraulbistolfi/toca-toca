@@ -1,8 +1,21 @@
 # Changelog
 
-## Versión actual: v1.2.1
+## Versión actual: v1.2.2
 
 Fecha de corte: 24 de febrero de 2026
+
+## v1.2.2 - 2026-02-24
+
+### UI y contenido
+
+- Mejora del render del changelog en el modal de información:
+  - ahora se parsea con estructura jerárquica por versión y sección
+  - los bullets anidados se muestran como sublista en lugar de texto plano
+- Corrección visual del bug donde cada línea de una sección aparecía con prefijo repetido (ej. `Documentación y mantenimiento:`).
+- Ajustes de estilos del bloque de changelog para mejorar legibilidad:
+  - separación entre versiones y secciones
+  - tipografía específica para títulos de sección
+  - espaciado consistente en listas y sublistas
 
 ## v1.2.1 - 2026-02-24
 

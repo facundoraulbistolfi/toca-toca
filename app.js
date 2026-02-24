@@ -1035,10 +1035,31 @@ function parseChangelogMarkdown(markdown) {
   const lines = String(markdown || "").split(/\r?\n/);
   let currentEntry = null;
   let currentSection = "";
+  let currentTopLevelNote = null;
+
+  const getOrCreateSection = (entry, sectionTitle) => {
+    if (!entry || typeof entry !== "object") {
+      return null;
+    }
+    const safeTitle = String(sectionTitle || "").trim();
+    const sections = Array.isArray(entry.sections) ? entry.sections : [];
+    const existing = sections.find((section) => String(section?.title || "").trim() === safeTitle);
+    if (existing) {
+      return existing;
+    }
+    const nextSection = {
+      title: safeTitle,
+      items: [],
+    };
+    entry.sections = [...sections, nextSection];
+    return nextSection;
+  };
 
   lines.forEach((line) => {
-    const trimmed = String(line || "").trim();
+    const raw = String(line || "");
+    const trimmed = raw.trim();
     if (!trimmed) {
+      currentTopLevelNote = null;
       return;
     }
 
@@ -1052,24 +1073,48 @@ function parseChangelogMarkdown(markdown) {
     if (versionMatch) {
       currentEntry = {
         title: versionMatch[1].trim(),
-        notes: [],
+        sections: [],
       };
       parsed.entries.push(currentEntry);
       currentSection = "";
+      currentTopLevelNote = null;
       return;
     }
 
     const sectionMatch = trimmed.match(/^###\s+(.+)$/);
     if (sectionMatch) {
       currentSection = sectionMatch[1].trim();
+      currentTopLevelNote = null;
       return;
     }
 
-    const bulletMatch = trimmed.match(/^-\s+(.+)$/);
+    const bulletMatch = raw.match(/^(\s*)-\s+(.+)$/);
     if (bulletMatch && currentEntry) {
-      const note = bulletMatch[1].trim();
-      currentEntry.notes.push(currentSection ? `${currentSection}: ${note}` : note);
+      const indent = String(bulletMatch[1] || "").replace(/\t/g, "  ").length;
+      const noteText = String(bulletMatch[2] || "").trim();
+      if (!noteText) {
+        return;
+      }
+
+      const section = getOrCreateSection(currentEntry, currentSection);
+      if (!section) {
+        return;
+      }
+
+      if (indent >= 2 && currentTopLevelNote) {
+        currentTopLevelNote.subItems.push(noteText);
+      } else {
+        const note = {
+          text: noteText,
+          subItems: [],
+        };
+        section.items.push(note);
+        currentTopLevelNote = note;
+      }
+      return;
     }
+
+    currentTopLevelNote = null;
   });
 
   return parsed;
@@ -1088,21 +1133,49 @@ function renderInfoChangelog(parsedChangelog) {
   } else {
     safeEntries.forEach((entry) => {
       const item = document.createElement("li");
+      item.className = "changelog-entry";
       const title = document.createElement("strong");
       title.textContent = String(entry?.title || "Versión sin titulo");
       item.append(title);
 
-      const notes = Array.isArray(entry?.notes) ? entry.notes : [];
-      if (notes.length > 0) {
-        const details = document.createElement("ul");
-        details.className = "changelog-entry-notes";
-        notes.forEach((note) => {
-          const noteItem = document.createElement("li");
-          noteItem.textContent = String(note || "");
-          details.append(noteItem);
-        });
-        item.append(details);
-      }
+      const sections = Array.isArray(entry?.sections) ? entry.sections : [];
+      sections.forEach((section) => {
+        const sectionTitle = String(section?.title || "").trim();
+        const notes = Array.isArray(section?.items) ? section.items : [];
+        if (!sectionTitle && notes.length === 0) {
+          return;
+        }
+
+        if (sectionTitle) {
+          const sectionLabel = document.createElement("p");
+          sectionLabel.className = "changelog-section-title";
+          sectionLabel.textContent = sectionTitle;
+          item.append(sectionLabel);
+        }
+
+        if (notes.length > 0) {
+          const details = document.createElement("ul");
+          details.className = "changelog-entry-notes";
+          notes.forEach((note) => {
+            const noteItem = document.createElement("li");
+            noteItem.textContent = String(note?.text || "");
+
+            const subItems = Array.isArray(note?.subItems) ? note.subItems : [];
+            if (subItems.length > 0) {
+              const subList = document.createElement("ul");
+              subList.className = "changelog-entry-subnotes";
+              subItems.forEach((subItemText) => {
+                const subItem = document.createElement("li");
+                subItem.textContent = String(subItemText || "");
+                subList.append(subItem);
+              });
+              noteItem.append(subList);
+            }
+            details.append(noteItem);
+          });
+          item.append(details);
+        }
+      });
       refs.changelogList.append(item);
     });
     refs.changelogList.dataset.loaded = "true";

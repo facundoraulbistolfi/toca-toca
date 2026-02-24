@@ -6,13 +6,13 @@ App web estilo casino para decidir a quién le toca, con una ruleta totalmente c
 
 URL pública: [https://facundoraulbistolfi.github.io/toca-toca/](https://facundoraulbistolfi.github.io/toca-toca/)
 
-[![Versión](https://img.shields.io/badge/version-v1.2.1-0a7f5a.svg)](./changelog.md)
+[![Versión](https://img.shields.io/badge/version-v1.2.2-0a7f5a.svg)](./changelog.md)
 [![Estado](https://img.shields.io/badge/estado-productiva-1f8f5f.svg)](./changelog.md)
 [![Stack](https://img.shields.io/badge/stack-HTML%20%7C%20CSS%20%7C%20JS-informational.svg)](#tecnologías-usadas)
 
 ## Versión actual
 
-`v1.2.1`
+`v1.2.2`
 
 ## Autor y créditos
 
