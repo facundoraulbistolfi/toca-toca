@@ -2777,6 +2777,22 @@ body.js-tooltip .actions.actions-icon button.action-icon-button::after {
   font-weight: 700;
 }
 
+.stats-actions-cell {
+  width: 4.5rem;
+  text-align: center;
+}
+
+.stats-actions-head {
+  width: 4.5rem;
+  text-align: center;
+}
+
+.stats-history-delete-button {
+  display: grid;
+  place-items: center;
+  margin-inline: auto;
+}
+
 .stats-player-cell {
   display: flex;
   align-items: center;
@@ -2929,7 +2945,8 @@ body.js-tooltip .actions.actions-icon button.action-icon-button::after {
     0 6px 11px -8px rgba(9, 14, 22, 0.75);
 }
 
-#resetConfirmAccept {
+#resetConfirmAccept,
+#historyDeleteConfirm {
   background:
     linear-gradient(145deg, rgba(176, 120, 70, 0.98), rgba(96, 60, 31, 0.98)),
     repeating-linear-gradient(
@@ -2940,7 +2957,8 @@ body.js-tooltip .actions.actions-icon button.action-icon-button::after {
     );
 }
 
-#resetConfirmAccept:hover:not(:disabled) {
+#resetConfirmAccept:hover:not(:disabled),
+#historyDeleteConfirm:hover:not(:disabled) {
   background:
     linear-gradient(145deg, rgba(195, 137, 82, 0.99), rgba(111, 69, 37, 0.99)),
     repeating-linear-gradient(

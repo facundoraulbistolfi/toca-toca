@@ -317,6 +317,12 @@ const refs = {
   statsRecentBody: document.getElementById("statsRecentBody"),
   statsRecentWrap: document.getElementById("statsRecentWrap"),
   statsRecentEmptyState: document.getElementById("statsRecentEmptyState"),
+  historyDeleteModal: document.getElementById("historyDeleteModal"),
+  historyDeleteClose: document.getElementById("historyDeleteClose"),
+  historyDeleteConfirm: document.getElementById("historyDeleteConfirm"),
+  historyDeleteCancel: document.getElementById("historyDeleteCancel"),
+  historyDeleteWinner: document.getElementById("historyDeleteWinner"),
+  historyDeleteDate: document.getElementById("historyDeleteDate"),
 };
 
 const ctx = refs.canvas?.getContext("2d");
@@ -361,6 +367,8 @@ const hiddenParticipantPctById = new Map();
 let importIncludeConfigOnNextFile = true;
 let importIncludeStatsOnNextFile = true;
 let statsTotalsExpanded = false;
+let pendingHistoryDeleteEntryId = "";
+let pendingHistoryDeleteRestoreFocus = null;
 
 init();
 
@@ -550,6 +558,14 @@ function bindEvents() {
   });
   refs.statsModalClose.addEventListener("click", closeStatsModal);
   refs.statsTotalsToggle.addEventListener("click", toggleStatsTotalsExpanded);
+  refs.historyDeleteModal.addEventListener("click", (event) => {
+    if (event.target instanceof HTMLElement && event.target.hasAttribute("data-close-history-delete-modal")) {
+      closeHistoryDeleteModal();
+    }
+  });
+  refs.historyDeleteClose.addEventListener("click", closeHistoryDeleteModal);
+  refs.historyDeleteCancel.addEventListener("click", closeHistoryDeleteModal);
+  refs.historyDeleteConfirm.addEventListener("click", confirmHistoryDeleteEntry);
   if (refs.argentinaFlagButton instanceof HTMLElement) {
     refs.argentinaFlagButton.addEventListener("click", triggerInfoEasterEgg);
   }
@@ -621,6 +637,10 @@ function bindEvents() {
     }
     if (event.key === "Escape" && !refs.importOptionsModal.hidden) {
       closeImportOptionsModal();
+      return;
+    }
+    if (event.key === "Escape" && !refs.historyDeleteModal.hidden) {
+      closeHistoryDeleteModal();
       return;
     }
     if (event.key === "Escape" && !refs.statsModal.hidden) {
@@ -832,26 +852,42 @@ function initFloatingTooltip() {
   document.body.classList.add("js-tooltip");
 
   targets.forEach((target) => {
-    target.removeAttribute("title");
-    target.addEventListener("pointerenter", () => {
-      showFloatingTooltip(target);
-    });
-    target.addEventListener("pointerleave", () => {
-      hideFloatingTooltip(target);
-    });
-    target.addEventListener("focus", () => {
-      showFloatingTooltip(target);
-    });
-    target.addEventListener("blur", () => {
-      hideFloatingTooltip(target);
-    });
-    target.addEventListener("pointerdown", () => {
-      hideFloatingTooltip();
-    });
+    registerFloatingTooltipTarget(target);
   });
 
   window.addEventListener("scroll", handleFloatingTooltipViewportChange, true);
   window.addEventListener("resize", handleFloatingTooltipViewportChange);
+}
+
+function registerFloatingTooltipTarget(target) {
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+  const text = String(target.dataset.tooltip || "").trim();
+  if (!text) {
+    return;
+  }
+  if (target.dataset.tooltipBound === "true") {
+    return;
+  }
+
+  target.dataset.tooltipBound = "true";
+  target.removeAttribute("title");
+  target.addEventListener("pointerenter", () => {
+    showFloatingTooltip(target);
+  });
+  target.addEventListener("pointerleave", () => {
+    hideFloatingTooltip(target);
+  });
+  target.addEventListener("focus", () => {
+    showFloatingTooltip(target);
+  });
+  target.addEventListener("blur", () => {
+    hideFloatingTooltip(target);
+  });
+  target.addEventListener("pointerdown", () => {
+    hideFloatingTooltip();
+  });
 }
 
 function handleFloatingTooltipViewportChange() {
@@ -1220,11 +1256,198 @@ function openStatsModal() {
 }
 
 function closeStatsModal(restoreFocus = true) {
+  if (!refs.historyDeleteModal.hidden) {
+    closeHistoryDeleteModal(false);
+  }
   refs.statsModal.hidden = true;
   refs.statsPanelToggle.setAttribute("aria-expanded", "false");
   if (restoreFocus) {
     refs.statsPanelToggle.focus();
   }
+}
+
+function findHistoryEntryById(entryId) {
+  const safeId = typeof entryId === "string" ? entryId.trim() : "";
+  if (!safeId) {
+    return null;
+  }
+  return (
+    getHistoryEntries().find(
+      (entry) => sanitizeStatsParticipantId(entry?.id) === safeId,
+    ) || null
+  );
+}
+
+function openHistoryDeleteModal(entryId, restoreFocusEl = null) {
+  if (isSpinning) {
+    return;
+  }
+  const entry = findHistoryEntryById(entryId);
+  if (!entry) {
+    setMessage("La salida seleccionada ya no existe.", "error");
+    renderStats();
+    return;
+  }
+  pendingHistoryDeleteEntryId = sanitizeStatsParticipantId(entry.id);
+  pendingHistoryDeleteRestoreFocus = restoreFocusEl instanceof HTMLElement ? restoreFocusEl : null;
+  renderHistoryDeletePreview(entry);
+  refs.historyDeleteModal.hidden = false;
+  refs.historyDeleteConfirm.focus();
+}
+
+function renderHistoryDeletePreview(entry) {
+  if (!(refs.historyDeleteWinner instanceof HTMLElement) || !(refs.historyDeleteDate instanceof HTMLElement)) {
+    return;
+  }
+  const timestamp = Math.max(0, Math.round(Number(entry?.timestamp) || 0));
+  const dateLabel = timestamp > 0 ? new Date(timestamp).toLocaleString("es") : "Sin fecha";
+  const display = resolveParticipantDisplay(entry?.winnerParticipantId, {
+    name: entry?.winnerName,
+    emoji: entry?.winnerEmoji,
+    color: entry?.winnerColor,
+  });
+  refs.historyDeleteWinner.replaceChildren(buildStatsPlayerChip(display));
+  refs.historyDeleteDate.textContent = `Fecha: ${dateLabel}`;
+}
+
+function closeHistoryDeleteModal(restoreFocus = true) {
+  refs.historyDeleteModal.hidden = true;
+  const restoreTarget = pendingHistoryDeleteRestoreFocus;
+  pendingHistoryDeleteEntryId = "";
+  pendingHistoryDeleteRestoreFocus = null;
+  if (refs.historyDeleteWinner instanceof HTMLElement) {
+    refs.historyDeleteWinner.replaceChildren();
+  }
+  if (refs.historyDeleteDate instanceof HTMLElement) {
+    refs.historyDeleteDate.textContent = "";
+  }
+  if (!restoreFocus) {
+    return;
+  }
+  if (restoreTarget instanceof HTMLElement && restoreTarget.isConnected) {
+    restoreTarget.focus();
+    return;
+  }
+  if (!refs.statsModal.hidden) {
+    refs.statsModalClose.focus();
+  }
+}
+
+function confirmHistoryDeleteEntry() {
+  const targetId = sanitizeStatsParticipantId(pendingHistoryDeleteEntryId);
+  if (!targetId) {
+    closeHistoryDeleteModal(false);
+    return;
+  }
+
+  const currentEntries = getHistoryEntries();
+  const nextEntries = currentEntries.filter(
+    (entry) => sanitizeStatsParticipantId(entry?.id) !== targetId,
+  );
+  if (nextEntries.length === currentEntries.length) {
+    closeHistoryDeleteModal(false);
+    setMessage("La salida seleccionada ya no existe.", "error");
+    renderStats();
+    return;
+  }
+
+  spinHistory = sanitizeSpinHistory({
+    version: SPIN_HISTORY_VERSION,
+    entries: nextEntries,
+  });
+  saveSpinHistory();
+  rebuildStatsFromHistoryEntries(getHistoryEntries());
+  closeHistoryDeleteModal(false);
+  renderStats();
+  setMessage("Salida eliminada del historial.", "success");
+}
+
+function rebuildStatsFromHistoryEntries(historyEntriesRaw = getHistoryEntries()) {
+  const historyEntries = Array.isArray(historyEntriesRaw) ? historyEntriesRaw : [];
+  if (historyEntries.length === 0) {
+    stats = defaultStats();
+    saveStats();
+    return;
+  }
+
+  const totalsByParticipant = new Map();
+  let streakParticipantId = "";
+  let streakCount = 0;
+  let bestStreak = null;
+  let lastWinner = null;
+
+  historyEntries.forEach((entry, index) => {
+    const participantId = sanitizeStatsParticipantId(entry?.winnerParticipantId);
+    if (!participantId) {
+      return;
+    }
+
+    const timestamp = Math.max(0, Math.round(Number(entry?.timestamp) || 0));
+    const snapshot = sanitizeStatsSnapshot(
+      {
+        name: entry?.winnerName,
+        emoji: entry?.winnerEmoji,
+        color: entry?.winnerColor,
+      },
+      index,
+    );
+
+    const existing = totalsByParticipant.get(participantId);
+    if (existing) {
+      existing.count += 1;
+      existing.snapshot = snapshot;
+      existing.lastSeenAt = timestamp;
+    } else {
+      totalsByParticipant.set(participantId, {
+        participantId,
+        count: 1,
+        snapshot,
+        lastSeenAt: timestamp,
+      });
+    }
+
+    if (streakParticipantId === participantId) {
+      streakCount += 1;
+    } else {
+      streakParticipantId = participantId;
+      streakCount = 1;
+    }
+
+    if (!bestStreak || streakCount > bestStreak.count) {
+      bestStreak = {
+        participantId,
+        count: streakCount,
+        snapshot,
+        achievedAt: timestamp,
+      };
+    }
+
+    lastWinner = {
+      participantId,
+      name: snapshot.name,
+      emoji: snapshot.emoji,
+      color: snapshot.color,
+      wonAt: timestamp,
+    };
+  });
+
+  if (!lastWinner) {
+    stats = defaultStats();
+    saveStats();
+    return;
+  }
+
+  stats = sanitizeStats({
+    version: STATS_VERSION,
+    lastWinner,
+    streak: {
+      participantId: sanitizeStatsParticipantId(lastWinner.participantId),
+      count: Math.max(1, streakCount),
+    },
+    bestStreak,
+    totals: Array.from(totalsByParticipant.values()),
+  });
+  saveStats();
 }
 
 function triggerInfoEasterEgg() {
@@ -2196,7 +2419,22 @@ function renderStatsRecent() {
     cell.append(buildStatsPlayerChip(display));
     winnerTd.append(cell);
 
-    tr.append(dateTd, winnerTd);
+    const actionsTd = document.createElement("td");
+    actionsTd.className = "stats-actions-cell";
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "remove-button stats-history-delete-button";
+    deleteButton.textContent = "🗑";
+    deleteButton.dataset.tooltip = "Eliminar salida del historial";
+    deleteButton.setAttribute("aria-label", "Eliminar esta salida del historial");
+    deleteButton.disabled = isSpinning;
+    deleteButton.addEventListener("click", () => {
+      openHistoryDeleteModal(entry?.id, deleteButton);
+    });
+    registerFloatingTooltipTarget(deleteButton);
+    actionsTd.append(deleteButton);
+
+    tr.append(dateTd, winnerTd, actionsTd);
     refs.statsRecentBody.append(tr);
   });
 
@@ -5372,6 +5610,9 @@ function setControlsDisabled(disabled) {
   refs.importIncludeStats.disabled = disabled;
   refs.resetButton.disabled = disabled;
   refs.resetConfirmCancel.disabled = disabled;
+  refs.historyDeleteClose.disabled = disabled;
+  refs.historyDeleteCancel.disabled = disabled;
+  refs.historyDeleteConfirm.disabled = disabled;
   refs.statsPanelToggle.disabled = disabled;
   refs.resetScopeConfig.disabled = disabled;
   refs.resetScopeUsers.disabled = disabled;
@@ -5385,6 +5626,9 @@ function setControlsDisabled(disabled) {
   }
   if (disabled && !refs.resetConfirmModal.hidden) {
     closeResetConfirmModal(false);
+  }
+  if (disabled && !refs.historyDeleteModal.hidden) {
+    closeHistoryDeleteModal(false);
   }
   if (disabled && !refs.statsModal.hidden) {
     closeStatsModal(false);

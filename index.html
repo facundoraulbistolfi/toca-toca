@@ -653,12 +653,47 @@
                 <tr>
                   <th scope="col">Fecha</th>
                   <th scope="col">Ganador</th>
+                  <th scope="col" class="stats-actions-head">Acción</th>
                 </tr>
               </thead>
               <tbody id="statsRecentBody"></tbody>
             </table>
           </div>
         </details>
+      </section>
+    </div>
+    <div id="historyDeleteModal" class="color-modal reset-confirm-modal" hidden>
+      <div class="color-modal-backdrop" data-close-history-delete-modal></div>
+      <section
+        class="color-modal-content reset-confirm-content"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="historyDeleteTitle"
+      >
+        <header class="color-modal-header">
+          <h3 id="historyDeleteTitle">Eliminar salida del historial</h3>
+          <button
+            id="historyDeleteClose"
+            class="color-modal-close"
+            type="button"
+            aria-label="Cerrar confirmación de borrado"
+            title="Cerrar confirmación de borrado"
+          >
+            ✕
+          </button>
+        </header>
+        <p class="reset-confirm-text">
+          Vas a eliminar esta salida del historial:
+        </p>
+        <div id="historyDeleteWinner" class="stats-last-winner-slot"></div>
+        <p id="historyDeleteDate" class="reset-confirm-text"></p>
+        <p class="reset-confirm-text">
+          Esta acción no se puede deshacer.
+        </p>
+        <div class="reset-confirm-actions">
+          <button id="historyDeleteConfirm" type="button">🗑 Eliminar</button>
+          <button id="historyDeleteCancel" class="secondary" type="button">↩️ Volver</button>
+        </div>
       </section>
     </div>
     <div id="resetConfirmModal" class="color-modal reset-confirm-modal" hidden>
