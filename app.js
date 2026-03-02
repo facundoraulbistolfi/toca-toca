@@ -299,6 +299,7 @@ const refs = {
   equalizePercentagesButton: document.getElementById("equalizePercentagesButton"),
   exportConfigButton: document.getElementById("exportConfigButton"),
   importConfigButton: document.getElementById("importConfigButton"),
+  shareConfigButton: document.getElementById("shareConfigButton"),
   importConfigInput: document.getElementById("importConfigInput"),
   exportOptionsModal: document.getElementById("exportOptionsModal"),
   exportOptionsClose: document.getElementById("exportOptionsClose"),
@@ -481,11 +482,15 @@ function init() {
   bindAudioUnlockEvents();
   document.body.classList.remove("theme-light");
   updateReducedMotionClass();
+  const loadedFromUrl = applySharedUrlConfig();
   render();
   setRimLightMode(RIM_LIGHT_MODE.STANDBY);
   startBackgroundEmojiRain();
   closeConfigPanel(false);
   closeParticipantsPanel(false);
+  if (loadedFromUrl) {
+    setMessage(tr("messages.shareUrlLoaded"), "success");
+  }
 }
 
 function resolveElement(target) {
@@ -614,6 +619,8 @@ function applyStaticTranslations() {
   setNodeAttribute(refs.exportConfigButton, "aria-label", tr("ui.config.backupExport"));
   setNodeAttribute(refs.importConfigButton, "data-tooltip", tr("ui.config.backupImport"));
   setNodeAttribute(refs.importConfigButton, "aria-label", tr("ui.config.backupImport"));
+  setNodeAttribute(refs.shareConfigButton, "data-tooltip", tr("ui.config.shareUrl"));
+  setNodeAttribute(refs.shareConfigButton, "aria-label", tr("ui.config.shareUrl"));
   setNodeAttribute(refs.resetButton, "data-tooltip", tr("ui.config.reset"));
   setNodeAttribute(refs.resetButton, "aria-label", tr("ui.config.reset"));
 
@@ -866,6 +873,7 @@ function bindEvents() {
   refs.exportConfigButton.addEventListener("click", openExportOptionsModal);
   refs.importConfigButton.addEventListener("click", openImportOptionsModal);
   refs.importConfigInput.addEventListener("change", importConfigFromFile);
+  refs.shareConfigButton.addEventListener("click", shareConfigUrl);
 
   refs.colorModal.addEventListener("click", (event) => {
     if (event.target instanceof HTMLElement && event.target.hasAttribute("data-close-color-modal")) {
@@ -2168,6 +2176,7 @@ function renderItemList() {
   refs.bulkAddButton.disabled = isSpinning;
   refs.exportConfigButton.disabled = isSpinning;
   refs.importConfigButton.disabled = isSpinning;
+  refs.shareConfigButton.disabled = isSpinning;
   refs.addItemButton.disabled = isSpinning || maxParticipantsReached;
   const addItemTooltip = maxParticipantsReached
     ? tr("messages.addParticipantMax", { max: MAX_PARTICIPANTS })
@@ -4319,6 +4328,99 @@ function parseBulkParticipants(rawText) {
     });
 }
 
+function encodeConfigForUrl(s) {
+  const compact = {
+    v: 1,
+    items: s.items.map(function (item) {
+      const entry = { n: item.name, e: item.emoji, c: item.color, p: item.pct };
+      if (item.hidden) entry.h = 1;
+      return entry;
+    }),
+  };
+  if (s.customTitle) compact.t = s.customTitle;
+  if (s.customSubtitle) compact.st = s.customSubtitle;
+  if (s.textLayout !== DEFAULT_TEXT_LAYOUT) compact.tl = s.textLayout;
+  if (s.wheelEmojiMode !== DEFAULT_WHEEL_EMOJI_MODE) compact.em = s.wheelEmojiMode;
+  if (s.textPositionPct !== DEFAULT_TEXT_POSITION_PCT) compact.tp = s.textPositionPct;
+  if (s.fontSizePx !== DEFAULT_FONT_SIZE_PX) compact.fs = s.fontSizePx;
+  if (s.fontFamilyId !== DEFAULT_FONT_FAMILY_ID) compact.ff = s.fontFamilyId;
+  try {
+    const json = JSON.stringify(compact);
+    const encoded = btoa(unescape(encodeURIComponent(json)))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+    return encoded;
+  } catch (_e) {
+    return null;
+  }
+}
+
+function decodeConfigFromUrl(hash) {
+  try {
+    const prefix = "#share=";
+    if (!hash || !hash.startsWith(prefix)) return null;
+    const encoded = hash.slice(prefix.length);
+    if (!encoded) return null;
+    const base64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+    const json = decodeURIComponent(escape(atob(padded)));
+    const compact = JSON.parse(json);
+    if (!compact || typeof compact !== "object" || compact.v !== 1) return null;
+    if (!Array.isArray(compact.items) || compact.items.length < 2) return null;
+    const partial = {
+      customTitle: compact.t || "",
+      customSubtitle: compact.st || "",
+      textLayout: compact.tl,
+      wheelEmojiMode: compact.em,
+      textPositionPct: compact.tp,
+      fontSizePx: compact.fs,
+      fontFamilyId: compact.ff,
+      items: compact.items.map(function (item) {
+        return {
+          id: makeId(),
+          name: item.n,
+          emoji: item.e,
+          color: item.c,
+          pct: item.p,
+          hidden: item.h === 1,
+          animationMode: DEFAULT_PARTICIPANT_ANIMATION_MODE,
+        };
+      }),
+    };
+    return sanitizeState(partial);
+  } catch (_e) {
+    return null;
+  }
+}
+
+function applySharedUrlConfig() {
+  const sharedState = decodeConfigFromUrl(window.location.hash);
+  if (!sharedState) return false;
+  state = sharedState;
+  saveState();
+  history.replaceState(null, "", location.pathname + location.search);
+  return true;
+}
+
+function shareConfigUrl() {
+  const encoded = encodeConfigForUrl(state);
+  if (!encoded) {
+    setMessage(tr("messages.shareUrlError"), "error");
+    return;
+  }
+  const url = location.origin + location.pathname + "#share=" + encoded;
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+    navigator.clipboard.writeText(url).then(function () {
+      setMessage(tr("messages.shareUrlSuccess"), "success");
+    }).catch(function () {
+      prompt(tr("messages.shareUrlCopy"), url);
+    });
+  } else {
+    prompt(tr("messages.shareUrlCopy"), url);
+  }
+}
+
 function exportCurrentConfig(options = {}) {
   const includeConfig = options?.includeConfig !== false;
   const includeStats = options?.includeStats !== false;
@@ -5843,6 +5945,7 @@ function setControlsDisabled(disabled) {
   refs.exportIncludeConfig.disabled = disabled;
   refs.exportIncludeStats.disabled = disabled;
   refs.importConfigButton.disabled = disabled;
+  refs.shareConfigButton.disabled = disabled;
   refs.importOptionsClose.disabled = disabled;
   refs.importOptionsCancel.disabled = disabled;
   refs.importOptionsConfirm.disabled = disabled;
