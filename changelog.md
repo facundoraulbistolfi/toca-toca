@@ -1,10 +1,10 @@
 # Changelog
 
-## Versión actual: v1.2.3
+## Versión actual: v1.3.1
 
 Fecha de corte: 24 de febrero de 2026
 
-## v1.2.3 - 2026-02-24
+## v1.3.1 - 2026-02-24
 
 ### Estadísticas y UX
 
@@ -22,31 +22,19 @@ Fecha de corte: 24 de febrero de 2026
   - `🗑 Eliminar`
   - `↩️ Volver`
 
-## v1.2.2 - 2026-02-24
+## v1.3.0 - 2026-02-24
 
-### UI y contenido
+### Internacionalización (i18n)
 
-- Mejora del render del changelog en el modal de información:
-  - ahora se parsea con estructura jerárquica por versión y sección
-  - los bullets anidados se muestran como sublista en lugar de texto plano
-- Corrección visual del bug donde cada línea de una sección aparecía con prefijo repetido (ej. `Documentación y mantenimiento:`).
-- Ajustes de estilos del bloque de changelog para mejorar legibilidad:
-  - separación entre versiones y secciones
-  - tipografía específica para títulos de sección
-  - espaciado consistente en listas y sublistas
+- Nuevo selector de idioma en `Configuración` con soporte para `es`, `en` y `pt-BR`.
+- Primera visita: detección automática por idioma del navegador con fallback a `es`.
+- Preferencia de idioma persistida en cookie + `localStorage` e incluida en backups de configuración.
+- Compatibilidad retroactiva para backups legacy sin campo de idioma.
 
-## v1.2.1 - 2026-02-24
+### Experiencia y personalización
 
-### Documentación y mantenimiento
-
-- Se agregó `docs/codex-context.md` como fuente única de contexto para Codex.
-- El documento consolida:
-  - objetivo y no-objetivos del producto
-  - decisiones cerradas de UX
-  - invariantes de negocio y límites operativos
-  - contrato de persistencia, import/export y migraciones
-  - checklist de regresión y backlog abierto
-- README actualizado para reflejar la nueva versión y referenciar el documento de contexto.
+- Header de la ruleta configurable por el usuario.
+- Ajustes de textos y etiquetas para mantener consistencia entre idiomas.
 
 ## v1.2.0 - 2026-02-24
 

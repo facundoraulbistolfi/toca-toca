@@ -4,11 +4,15 @@ title: "[Bug]: "
 labels:
   - bug
 body:
-  - type: textarea
-    id: descripcion
+  - type: markdown
     attributes:
-      label: Descripcion del problema
-      description: Conta que esta fallando.
+      value: |
+        Gracias por reportar. Cuanto más concreto sea el reporte, más rápido se puede resolver.
+  - type: textarea
+    id: descripcion_problema
+    attributes:
+      label: Descripción del problema
+      description: Contá claramente qué está fallando.
       placeholder: Al girar la ruleta, el resultado se congela...
     validations:
       required: true
@@ -27,22 +31,67 @@ body:
   - type: textarea
     id: esperado
     attributes:
-      label: Resultado esperado (opcional)
-      description: Que esperabas que pasara?
+      label: Resultado esperado
+      description: ¿Qué debería pasar?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Resultado actual
+      description: ¿Qué pasa realmente?
+    validations:
+      required: true
+  - type: dropdown
+    id: impacto
+    attributes:
+      label: Impacto
+      description: ¿Qué tan grave es este bug?
+      options:
+        - Bloqueante (no puedo usar la app)
+        - Alto (flujo principal afectado)
+        - Medio (hay workaround)
+        - Bajo (detalle menor)
+    validations:
+      required: true
+  - type: dropdown
+    id: entorno
+    attributes:
+      label: Entorno
+      options:
+        - Web (desktop)
+        - Web (mobile)
+        - Ambos
+    validations:
+      required: true
+  - type: input
+    id: navegador
+    attributes:
+      label: Navegador y versión
+      description: "Ejemplo: Chrome 122, Safari 17.4"
+      placeholder: Chrome 122
     validations:
       required: false
   - type: input
     id: version
     attributes:
-      label: Version visible en la app (opcional)
-      description: Ejemplo: v1.0.0
+      label: Versión visible en la app
+      description: "Ejemplo: v1.0.0"
       placeholder: v1.0.0
+    validations:
+      required: false
+  - type: textarea
+    id: evidencia
+    attributes:
+      label: Evidencia adicional (opcional)
+      description: Capturas, video, consola o contexto técnico extra.
+      placeholder: Pegá acá logs o detalles relevantes.
     validations:
       required: false
   - type: checkboxes
     id: privacidad
     attributes:
-      label: Confirmacion de privacidad
+      label: Confirmación de privacidad
       options:
-        - label: Entiendo que este issue es publico y no incluye datos personales o sensibles.
+        - label: Entiendo que este issue es público y no incluye datos personales o sensibles.
           required: true
