@@ -2786,6 +2786,22 @@ body.js-tooltip .actions.actions-icon button.action-icon-button::after {
   font-weight: 700;
 }
 
+.stats-actions-cell {
+  width: 4.5rem;
+  text-align: center;
+}
+
+.stats-actions-head {
+  width: 4.5rem;
+  text-align: center;
+}
+
+.stats-history-delete-button {
+  display: grid;
+  place-items: center;
+  margin-inline: auto;
+}
+
 .stats-player-cell {
   display: flex;
   align-items: center;
@@ -2938,7 +2954,8 @@ body.js-tooltip .actions.actions-icon button.action-icon-button::after {
     0 6px 11px -8px rgba(9, 14, 22, 0.75);
 }
 
-#resetConfirmAccept {
+#resetConfirmAccept,
+#historyDeleteConfirm {
   background:
     linear-gradient(145deg, rgba(176, 120, 70, 0.98), rgba(96, 60, 31, 0.98)),
     repeating-linear-gradient(
@@ -2949,7 +2966,8 @@ body.js-tooltip .actions.actions-icon button.action-icon-button::after {
     );
 }
 
-#resetConfirmAccept:hover:not(:disabled) {
+#resetConfirmAccept:hover:not(:disabled),
+#historyDeleteConfirm:hover:not(:disabled) {
   background:
     linear-gradient(145deg, rgba(195, 137, 82, 0.99), rgba(111, 69, 37, 0.99)),
     repeating-linear-gradient(
@@ -3061,7 +3079,7 @@ body.js-tooltip .actions.actions-icon button.action-icon-button::after {
   margin: 0;
   padding-left: 1.1rem;
   display: grid;
-  gap: 0.32rem;
+  gap: 0.55rem;
   color: #4b301d;
   font-family: var(--font-ui);
 }
@@ -3110,10 +3128,36 @@ body.js-tooltip .actions.actions-icon button.action-icon-button::after {
 }
 
 .changelog-entry-notes {
-  margin: 0.32rem 0 0.15rem;
+  margin: 0.24rem 0 0.2rem;
+  padding-left: 1.05rem;
+  display: grid;
+  gap: 0.28rem;
+}
+
+.changelog-entry {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.changelog-entry > strong {
+  color: #4d2e16;
+}
+
+.changelog-section-title {
+  margin: 0.28rem 0 0;
+  font-family: var(--font-accent);
+  font-size: 0.86rem;
+  letter-spacing: 0.02em;
+  font-weight: 700;
+  color: rgba(90, 50, 20, 0.9);
+}
+
+.changelog-entry-subnotes {
+  margin: 0.2rem 0 0;
   padding-left: 1rem;
   display: grid;
-  gap: 0.2rem;
+  gap: 0.16rem;
+  color: rgba(75, 48, 29, 0.92);
 }
 
 .changelog-status-item {

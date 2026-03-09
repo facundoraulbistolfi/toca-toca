@@ -1,8 +1,26 @@
 # Changelog
 
-## Versión actual: v1.3.0
+## Versión actual: v1.3.1
 
 Fecha de corte: 24 de febrero de 2026
+
+## v1.3.1 - 2026-02-24
+
+### Estadísticas y UX
+
+- Nueva acción para borrar una salida puntual desde `Últimas 10 salidas` en el modal de estadísticas.
+- Nuevo modal de confirmación antes de eliminar una salida individual del historial.
+- Al borrar una salida, se recalculan automáticamente estadísticas derivadas:
+  - último ganador
+  - racha actual
+  - racha más larga
+  - acumulado por jugador
+- La tabla de últimas salidas ahora incluye columna de acciones.
+- El botón de borrar del historial adopta el mismo estilo del botón de borrar en la lista de participantes.
+- Se agregó tooltip al botón de borrar del historial.
+- Botones del modal de borrado mejorados con emojis:
+  - `🗑 Eliminar`
+  - `↩️ Volver`
 
 ## v1.3.0 - 2026-02-24
 
